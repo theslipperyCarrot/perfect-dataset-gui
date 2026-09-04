@@ -31,3 +31,4 @@ läuft die Versionierung über Git-Commits/-Tags weiter, nicht mehr nur
 - **0.13.2** — Fix: `weights_only` jetzt erzwungen statt nur vorbelegt (pytorch-lightning übergibt es explizit)
 - **0.13.3** — Fix: `ctranslate2` auf cuDNN9-kompatible Version (>=4.5.0) gepinnt
 - **0.13.4** — Fix: hartcodierter Sandbox-Pfad (`/home/claude/...`) beim Export-ZIP-Download entfernt (systemabhängiger Bug, wäre auf jedem anderen Rechner kaputt gewesen)
+- **0.13.5** — README.md hinzugefügt (Setup-Anleitung, Voraussetzungen, Pipeline-Übersicht)
