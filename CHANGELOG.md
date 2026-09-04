@@ -33,3 +33,4 @@ läuft die Versionierung über Git-Commits/-Tags weiter, nicht mehr nur
 - **0.13.4** — Fix: hartcodierter Sandbox-Pfad (`/home/claude/...`) beim Export-ZIP-Download entfernt (systemabhängiger Bug, wäre auf jedem anderen Rechner kaputt gewesen)
 - **0.13.5** — README.md hinzugefügt (Setup-Anleitung, Voraussetzungen, Pipeline-Übersicht)
 - **0.13.6** — Fix: Audio-Import scheiterte lautlos bei bestimmten WAV-Dateien (z.B. als .wav umbenannte MP3s) und meldete fälschlich 0,0s statt eines Fehlers; jetzt FFmpeg-Fallback (pydub) + sichtbare Fehlermeldung in der GUI. LICENSE (MIT) + Transparenz-Hinweis in README.md ergänzt (Projekt entstand im Dialog mit Claude)
+- **0.13.7** — Fix: torch/torchaudio-Exaktpin (2.11.0) kollidierte mit whisperx-Versionen, die ctranslate2>=4.5.0 (cuDNN9-Fix) unterstützen — die brauchen torchaudio im 2.8.x-Bereich. Jetzt als Bereich statt Exaktversion gepinnt, damit uv eine gemeinsam kompatible Kombination findet

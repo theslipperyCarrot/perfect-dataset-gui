@@ -12,11 +12,15 @@ scipy>=1.13.0
 # Original "demucs" ist seit 2023 unmaintained und bricht mit aktuellem
 # torchaudio (das sein altes Decoding-Backend entfernt hat). Dieser Fork
 # ersetzt es durch torchcodec und ist mit aktuellem PyTorch kompatibel.
-# torch/torchaudio bewusst auf exakt gleiche, zueinander passende Version
-# gepinnt (lose ">="-Angaben führten sonst zu inkompatiblen Kombinationen).
+# torch/torchaudio als Bereich (nicht exakte Version) freigegeben, damit uv
+# selbst eine Kombination findet, die gleichzeitig zu whisperx UND
+# ctranslate2>=4.5.0 (cuDNN9-Fix, siehe unten) passt — neuere whisperx-
+# Versionen mit ctranslate2>=4.5.0-Unterstützung verlangen torchaudio im
+# 2.8.x-Bereich. torch/torchaudio bleiben dabei über denselben Bereich
+# zueinander passend (kein Versions-Mismatch wie ganz am Anfang).
 # WICHTIG: braucht FFmpeg auf dem System (siehe README/Chat-Hinweis).
-torch==2.11.0
-torchaudio==2.11.0
+torch>=2.8.0,<2.9.0
+torchaudio>=2.8.0,<2.9.0
 torchcodec>=0.4.0
 demucs-torchcodec>=0.1.0
 
@@ -25,7 +29,7 @@ deepfilternet>=0.5.6
 
 # --- VAD (Voice Activity Detection) ---
 # Silero VAD wird über torch.hub geladen (silero-vad Repo), kein separates
-# Package nötig — torch/torchaudio kommen bereits von oben (exakt gepinnt).
+# Package nötig — torch/torchaudio kommen bereits von oben (als Bereich).
 
 # --- Transkription ---
 whisperx>=3.3.1
