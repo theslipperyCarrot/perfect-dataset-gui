@@ -32,3 +32,4 @@ läuft die Versionierung über Git-Commits/-Tags weiter, nicht mehr nur
 - **0.13.3** — Fix: `ctranslate2` auf cuDNN9-kompatible Version (>=4.5.0) gepinnt
 - **0.13.4** — Fix: hartcodierter Sandbox-Pfad (`/home/claude/...`) beim Export-ZIP-Download entfernt (systemabhängiger Bug, wäre auf jedem anderen Rechner kaputt gewesen)
 - **0.13.5** — README.md hinzugefügt (Setup-Anleitung, Voraussetzungen, Pipeline-Übersicht)
+- **0.13.6** — Fix: Audio-Import scheiterte lautlos bei bestimmten WAV-Dateien (z.B. als .wav umbenannte MP3s) und meldete fälschlich 0,0s statt eines Fehlers; jetzt FFmpeg-Fallback (pydub) + sichtbare Fehlermeldung in der GUI. LICENSE (MIT) + Transparenz-Hinweis in README.md ergänzt (Projekt entstand im Dialog mit Claude)

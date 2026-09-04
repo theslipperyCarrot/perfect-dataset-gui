@@ -7,6 +7,17 @@ Datensatz in einer durchgehenden Pipeline.
 
 Oberfläche zweisprachig (Deutsch/Englisch), Deutsch als Standard.
 
+## Über dieses Projekt
+
+Dieses Tool ist komplett im Dialog mit **Claude** (Anthropic) entstanden — von
+der ersten Projektstruktur bis zu den einzelnen Bugfixes. Ich selbst bringe
+dabei bewusst wenig Fachwissen in Audio-Verarbeitung/ML mit; die technischen
+Entscheidungen, der Code und die Debugging-Arbeit stammen praktisch komplett
+von Claude, ich habe getestet, Rückmeldung gegeben und die Richtung
+vorgegeben. Das heißt auch: Es kann Stellen geben, die ein erfahrener
+Entwickler anders/besser lösen würde — Hinweise, Pull Requests und Kritik
+sind ausdrücklich willkommen.
+
 ## Screenshots
 
 <!-- TODO: Screenshots der 5 Tabs hier einfügen -->
@@ -98,4 +109,5 @@ Details zur Versionshistorie: [CHANGELOG.md](CHANGELOG.md).
 
 ## Lizenz
 
-<!-- TODO: Lizenz wählen (z.B. MIT) und hier eintragen -->
+MIT — siehe [LICENSE](LICENSE). Freie Nutzung, Veränderung und Weitergabe,
+auch kommerziell, mit Namensnennung.

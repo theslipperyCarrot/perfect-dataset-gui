@@ -69,7 +69,7 @@ def handle_import(files, folder_files):
                 f"({r.original_sr} Hz → {r.target_sr} Hz, {r.duration_s:.1f}s)"
             )
         else:
-            lines.append(f"✗ {Path_basename(r.source_path)}")
+            lines.append(f"✗ {Path_basename(r.source_path)}: {r.message}")
     return "\n".join(lines), _raw_file_table()
 
 
