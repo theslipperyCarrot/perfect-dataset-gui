@@ -88,7 +88,8 @@ def handle_export_run():
     zip_path = None
     if summary.xtts_count or summary.rvc_count:
         import shutil
-        zip_base = "/home/claude/dataset_export"
+        import tempfile
+        zip_base = str(Path(tempfile.gettempdir()) / "perfect_dataset_gui_export")
         shutil.make_archive(zip_base, "zip", root_dir=str(EXPORT_DIR), base_dir=".")
         zip_path = zip_base + ".zip"
 
