@@ -1,0 +1,15 @@
+fastapi>=0.110.0
+uvicorn>=0.29.0
+python-multipart>=0.0.9
+
+# torch/torchaudio exakt gepinnt (gleiches Problem wie im Hauptprojekt:
+# torchaudio.load() delegiert seit 2.9 an torchcodec, das explizit
+# mitinstalliert werden muss).
+torch==2.11.0
+torchaudio==2.11.0
+torchcodec>=0.4.0
+
+numpy>=1.26.0
+pandas>=2.0.0
+librosa>=0.10.0
+soundfile>=0.12.1

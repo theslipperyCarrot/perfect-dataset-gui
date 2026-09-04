@@ -1,0 +1,43 @@
+# --- Core UI ---
+gradio>=4.44.0
+
+# --- Audio I/O & Verarbeitung ---
+soundfile>=0.12.1
+librosa>=0.10.2
+pydub>=0.25.1
+numpy>=1.26.0
+scipy>=1.13.0
+
+# --- Musik-/Rauschentfernung ---
+# Original "demucs" ist seit 2023 unmaintained und bricht mit aktuellem
+# torchaudio (das sein altes Decoding-Backend entfernt hat). Dieser Fork
+# ersetzt es durch torchcodec und ist mit aktuellem PyTorch kompatibel.
+# torch/torchaudio bewusst auf exakt gleiche, zueinander passende Version
+# gepinnt (lose ">="-Angaben führten sonst zu inkompatiblen Kombinationen).
+# WICHTIG: braucht FFmpeg auf dem System (siehe README/Chat-Hinweis).
+torch==2.11.0
+torchaudio==2.11.0
+torchcodec>=0.4.0
+demucs-torchcodec>=0.1.0
+
+# --- Denoising (Restrauschen nach Demucs) ---
+deepfilternet>=0.5.6
+
+# --- VAD (Voice Activity Detection) ---
+# Silero VAD wird über torch.hub geladen (silero-vad Repo), kein separates
+# Package nötig — torch/torchaudio kommen bereits von oben (exakt gepinnt).
+
+# --- Transkription ---
+whisperx>=3.3.1
+# whisperX/faster-whisper nutzen ctranslate2 zur Inferenz. ctranslate2<=4.4.0
+# ist hart gegen cuDNN 8 kompiliert, während unser torch (oben) cuDNN 9
+# mitbringt (die alte cudnn8-.so-Datei existiert dort gar nicht mehr) ->
+# "Could not load library libcudnn_ops_infer.so.8". Seit ctranslate2==4.5.0
+# gibt es native cuDNN-9-Unterstützung, das behebt es sauber ohne System-Pakete.
+ctranslate2>=4.5.0
+
+# --- Sonstiges ---
+pandas>=2.2.0
+tqdm>=4.66.0
+pyloudnorm>=0.1.1
+requests>=2.31.0
