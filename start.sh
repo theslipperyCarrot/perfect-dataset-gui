@@ -47,6 +47,14 @@ if [ ! -x "$NISQA_PY" ]; then
     pause_on_error
 fi
 
+if ! "$NISQA_PY" -c "import nisqalib" 2>/dev/null; then
+    echo "NISQA-venv gefunden, aber 'nisqalib' fehlt darin."
+    echo "Vermutlich wurde die venv manuell angelegt statt über das Install-Skript"
+    echo "(das installiert nisqalib in einem eigenen, zusätzlichen Schritt):"
+    echo "  bash nisqa_server/install.sh"
+    pause_on_error
+fi
+
 if [ ! -x "$DENOISE_PY" ]; then
     echo "Denoise-Server-venv nicht gefunden unter: $DENOISE_PY"
     echo "Der Denoise-Server braucht eine EIGENE, separate Installation:"

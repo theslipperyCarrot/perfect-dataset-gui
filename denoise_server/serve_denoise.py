@@ -8,6 +8,10 @@ braucht zwingend numpy<2.0, was mit modernen whisperx/ctranslate2-Versionen
 Start: uvicorn serve_denoise:app --port 8051
 (siehe start.sh im Projekt-Wurzelverzeichnis für den kombinierten Start)
 """
+import sys
+import types
+import importlib.abc
+import importlib.machinery
 import tempfile
 from pathlib import Path
 
@@ -23,9 +27,50 @@ _df_state = None
 _patched = False
 
 
+class _DummyAny:
+    def __call__(self, *a, **k):
+        return _DummyAny()
+
+    def __getattr__(self, name):
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        return _DummyAny()
+
+
+class _PermissiveModule(types.ModuleType):
+    def __getattr__(self, name):
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        return _DummyAny()
+
+
+class _TorchaudioBackendShimLoader(importlib.abc.Loader):
+    def create_module(self, spec):
+        mod = _PermissiveModule(spec.name)
+        mod.__path__ = []
+        return mod
+
+    def exec_module(self, module):
+        pass
+
+
+class _TorchaudioBackendShimFinder(importlib.abc.MetaPathFinder):
+    PREFIX = "torchaudio.backend"
+
+    def find_spec(self, fullname, path, target=None):
+        if fullname == self.PREFIX or fullname.startswith(self.PREFIX + "."):
+            return importlib.machinery.ModuleSpec(
+                fullname, _TorchaudioBackendShimLoader(), is_package=True,
+            )
+        return None
+
+
 def _ensure_torchaudio_compat():
-    """Eigenständige Mini-Variante des Kompat-Shims aus dem Hauptprojekt
-    (modules/torchaudio_compat.py) — läuft hier in einer eigenen venv."""
+    """Eigenständige Variante des Kompat-Shims aus dem Hauptprojekt
+    (modules/torchaudio_compat.py) — läuft hier in einer eigenen venv.
+    WICHTIG: braucht auch den Meta-Path-Finder für 'torchaudio.backend.*'
+    (nicht nur einzelne Attribute), da df/io.py explizit
+    'from torchaudio.backend.common import AudioMetaData' importiert."""
     global _patched
     if _patched:
         return
@@ -52,6 +97,12 @@ def _ensure_torchaudio_compat():
         class _AudioMetaDataShim:
             pass
         torchaudio.AudioMetaData = _AudioMetaDataShim
+
+    try:
+        import torchaudio.backend  # noqa: F401
+    except ModuleNotFoundError:
+        if not any(isinstance(f, _TorchaudioBackendShimFinder) for f in sys.meta_path):
+            sys.meta_path.insert(0, _TorchaudioBackendShimFinder())
 
     _patched = True
 
