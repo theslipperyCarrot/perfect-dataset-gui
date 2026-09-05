@@ -10,7 +10,7 @@ from pathlib import Path
 # Semantisch: <1.0.0 solange kein vollständiger Echtdurchlauf (alle 5 Tabs,
 # echtes Audio) bestätigt wurde. Wird in Snapshot-Namen mit eingebettet,
 # siehe modules/snapshot.py, und im GUI-Header angezeigt.
-PROJECT_VERSION = "0.13.7"
+PROJECT_VERSION = "0.14.0"
 
 # --- Verzeichnisstruktur ---
 BASE_DIR = Path(__file__).resolve().parent
@@ -40,6 +40,7 @@ PEAK_LIMIT = 0.99     # verhindert Clipping nach der Lautstärke-Anhebung
 
 # --- Qualitäts-Scoring (Review-Tab) ---
 NISQA_SERVER_URL = "http://localhost:8050/predict"  # separater NISQA-Server, siehe nisqa_server/
+DENOISE_SERVER_URL = "http://localhost:8051/denoise"  # separater Denoise-Server, siehe denoise_server/
 NISQA_MOS_RED_THRESHOLD = 2.5   # NISQA-Skala 1-5: darunter = rot markiert
 ASR_CONFIDENCE_RED_THRESHOLD = 0.6  # whisperX-Wortkonfidenz 0-1: darunter = rot markiert
 

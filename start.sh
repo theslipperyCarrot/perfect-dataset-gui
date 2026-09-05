@@ -1,7 +1,8 @@
 #!/bin/bash
-# Startet den NISQA-Server im Hintergrund und danach die Perfect Dataset GUI.
-# Bewusst OHNE 'set -e', damit das Fenster bei einem Fehler offen bleibt
-# (wichtig bei Start per Doppelklick, sonst verschwindet das Terminal sofort).
+# Startet NISQA-Server + Denoise-Server im Hintergrund und danach die
+# Perfect Dataset GUI. Bewusst OHNE 'set -e', damit das Fenster bei einem
+# Fehler offen bleibt (wichtig bei Start per Doppelklick, sonst verschwindet
+# das Terminal sofort).
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,6 +31,7 @@ print(':'.join(dirs))
 
 MAIN_PY="$SCRIPT_DIR/.venv/bin/python"
 NISQA_PY="$SCRIPT_DIR/nisqa_server/.venv/bin/python"
+DENOISE_PY="$SCRIPT_DIR/denoise_server/.venv/bin/python"
 
 if [ ! -x "$MAIN_PY" ]; then
     echo "Haupt-venv nicht gefunden unter: $MAIN_PY"
@@ -45,34 +47,55 @@ if [ ! -x "$NISQA_PY" ]; then
     pause_on_error
 fi
 
+if [ ! -x "$DENOISE_PY" ]; then
+    echo "Denoise-Server-venv nicht gefunden unter: $DENOISE_PY"
+    echo "Der Denoise-Server braucht eine EIGENE, separate Installation:"
+    echo "  bash denoise_server/install.sh"
+    pause_on_error
+fi
+
+BG_PIDS=()
+cleanup() {
+    echo "Beende Hintergrund-Server..."
+    for pid in "${BG_PIDS[@]}"; do
+        kill "$pid" 2>/dev/null || true
+    done
+}
+trap cleanup EXIT
+
 echo "Starte NISQA-Server (Port 8050)..."
 (
     cd "$SCRIPT_DIR/nisqa_server"
     export LD_LIBRARY_PATH="$(torch_ld_library_path "$NISQA_PY")"
     "$NISQA_PY" -m uvicorn serve_nisqa:app --port 8050 --host 0.0.0.0
 ) &
-NISQA_PID=$!
+BG_PIDS+=($!)
 
-cleanup() {
-    echo "Beende NISQA-Server (PID $NISQA_PID)..."
-    kill "$NISQA_PID" 2>/dev/null || true
+echo "Starte Denoise-Server (Port 8051)..."
+(
+    cd "$SCRIPT_DIR/denoise_server"
+    export LD_LIBRARY_PATH="$(torch_ld_library_path "$DENOISE_PY")"
+    "$DENOISE_PY" -m uvicorn serve_denoise:app --port 8051 --host 0.0.0.0
+) &
+BG_PIDS+=($!)
+
+wait_for_server() {
+    local name="$1" url="$2"
+    echo "Warte auf $name..."
+    for i in $(seq 1 30); do
+        if curl -s -o /dev/null "$url"; then
+            echo "$name bereit."
+            return 0
+        fi
+        sleep 1
+    done
+    echo "WARNUNG: $name antwortet nach 30s nicht — GUI startet trotzdem,"
+    echo "die zugehörige Funktion liefert dann aber nur Fehler/Fallback."
+    return 1
 }
-trap cleanup EXIT
 
-echo "Warte auf NISQA-Server..."
-NISQA_READY=0
-for i in $(seq 1 30); do
-    if curl -s -o /dev/null http://localhost:8050/health; then
-        echo "NISQA-Server bereit."
-        NISQA_READY=1
-        break
-    fi
-    sleep 1
-done
-if [ "$NISQA_READY" -eq 0 ]; then
-    echo "WARNUNG: NISQA-Server antwortet nach 30s nicht — GUI startet trotzdem,"
-    echo "NISQA-Bewertung im Review-Tab liefert dann aber nur Fehler/n.a."
-fi
+wait_for_server "NISQA-Server" "http://localhost:8050/health"
+wait_for_server "Denoise-Server" "http://localhost:8051/health"
 
 echo "Starte Perfect Dataset GUI..."
 export LD_LIBRARY_PATH="$(torch_ld_library_path "$MAIN_PY")"

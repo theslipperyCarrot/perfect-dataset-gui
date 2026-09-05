@@ -61,8 +61,10 @@ automatischer Reset beim Beenden.
 
 ## Installation
 
-Zwei getrennte Python-Umgebungen: die Haupt-GUI und der NISQA-Qualitäts-
-Server (eigene, unabhängige venv, da eigene Torch-/Abhängigkeits-Version).
+Drei getrennte Python-Umgebungen: die Haupt-GUI, der NISQA-Qualitäts-Server
+und der Denoise-Server (DeepFilterNet) — beide als eigene, unabhängige venvs,
+da sie mit dem Hauptprojekt inkompatible Abhängigkeiten haben (siehe
+`requirements.txt`-Kommentare).
 
 ```bash
 # Haupt-GUI
@@ -71,6 +73,9 @@ uv pip install -r requirements.txt
 
 # NISQA-Server (separat, eigene venv)
 bash nisqa_server/install.sh
+
+# Denoise-Server (separat, eigene venv)
+bash denoise_server/install.sh
 ```
 
 ## Starten
@@ -79,7 +84,7 @@ bash nisqa_server/install.sh
 bash start.sh
 ```
 
-Startet beide Server (NISQA im Hintergrund + Haupt-GUI) und öffnet die GUI
+Startet alle Server (NISQA + Denoise im Hintergrund, dann die Haupt-GUI) und öffnet die GUI
 unter `http://127.0.0.1:7860`. Bei einem Fehler bleibt das Terminal-Fenster
 offen (auch bei Start per Doppelklick), damit die Meldung lesbar ist.
 
@@ -103,7 +108,7 @@ Wert steht.
   `requirements.txt`), da mehrere Abhängigkeiten (Demucs-Fork, DeepFilterNet,
   whisperX/pyannote) nicht durchgängig mit den neuesten `torchaudio`-APIs
   kompatibel sind. Kompatibilitätsschicht dafür: `modules/torchaudio_compat.py`.
-- NISQA-Server läuft aktuell fest auf Port 8050 (in `config.py` änderbar).
+- NISQA-Server läuft auf Port 8050, Denoise-Server auf Port 8051 (beide in `config.py` änderbar).
 
 Details zur Versionshistorie: [CHANGELOG.md](CHANGELOG.md).
 

@@ -1,0 +1,15 @@
+fastapi>=0.110.0
+uvicorn>=0.29.0
+python-multipart>=0.0.9
+
+# DeepFilterNet (aktuell max. 0.5.6) braucht zwingend numpy<2.0 — das
+# kollidiert mit den numpy>=2.0-Anforderungen moderner whisperx/ctranslate2-
+# Versionen im Hauptprojekt. Deshalb komplett eigene, isolierte venv statt
+# gemeinsamer Umgebung (gleiches Muster wie nisqa_server/).
+deepfilternet>=0.5.6
+
+torch>=2.2.0
+torchaudio>=2.2.0
+
+numpy>=1.22,<2.0
+soundfile>=0.12.1

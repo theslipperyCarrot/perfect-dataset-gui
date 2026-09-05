@@ -25,7 +25,10 @@ torchcodec>=0.4.0
 demucs-torchcodec>=0.1.0
 
 # --- Denoising (Restrauschen nach Demucs) ---
-deepfilternet>=0.5.6
+# DeepFilterNet läuft NICHT hier, sondern als eigener Server in einer
+# komplett eigenen venv (siehe denoise_server/) — es braucht zwingend
+# numpy<2.0, was mit modernem whisperx/ctranslate2 (numpy>=2.0, siehe unten)
+# nicht in derselben Umgebung koexistieren kann.
 
 # --- VAD (Voice Activity Detection) ---
 # Silero VAD wird über torch.hub geladen (silero-vad Repo), kein separates

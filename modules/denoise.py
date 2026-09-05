@@ -4,63 +4,38 @@ Optionales Denoising mit DeepFilterNet.
 Demucs trennt Musik/Instrumente von Sprache, entfernt aber kein
 Mikro-Hiss, Raumhall oder Lüfter-/Grundrauschen in der Sprachspur
 selbst. DeepFilterNet ist ein leichtgewichtiges, echtzeitfähiges
-Modell genau dafür und läuft gut lokal auf einer RTX 2080 Ti.
+Modell genau dafür.
 
-Wie bei Demucs (siehe demucs_separation.py) laden/speichern wir Audio
-selbst über soundfile/librosa statt über DeepFilterNets eigene
-load_audio()/save_audio()-Hilfsfunktionen — die nutzen intern
-torchaudio.info()/load(), das aktuelle torchaudio-Versionen (>=2.9,
-Umstieg auf torchcodec) entfernt haben. Die eigentliche enhance()-
-Funktion braucht ohnehin nur einen fertigen Tensor, keine Datei.
-
-DeepFilterNet arbeitet intern mit 48 kHz Mono — Ein-/Ausgabe wird
-entsprechend resampled.
+Läuft als SEPARATER Server (denoise_server/, eigene venv) — DeepFilterNet
+(max. Version 0.5.6) braucht zwingend numpy<2.0, was mit modernen
+whisperx/ctranslate2-Versionen (numpy>=2.0) im Hauptprojekt nicht in
+derselben Umgebung koexistieren kann. Client hier ruft den Server nur
+per HTTP auf, mit Fallback (Original unverändert zurückgeben), falls der
+Server mal nicht erreichbar ist — bricht die Pipeline dadurch nicht ab.
 """
 import sys
 from pathlib import Path
 
-import numpy as np
-import soundfile as sf
-import librosa
-import torch
+import requests
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from modules.torchaudio_compat import ensure_patched as ensure_torchaudio_compat
-
-_df_model = None
-_df_state = None
+from config import DENOISE_SERVER_URL
 
 
-def _load_deepfilternet():
-    """Lazy-Load, damit die GUI startet, ohne dass sofort ein Modell geladen wird."""
-    global _df_model, _df_state
-    if _df_model is None:
-        ensure_torchaudio_compat()
-        from df.enhance import init_df
-        _df_model, _df_state, _ = init_df()
-    return _df_model, _df_state
-
-
-def denoise_file(input_path: Path, output_path: Path) -> Path:
-    """Entfernt Restrauschen aus input_path und schreibt nach output_path."""
-    from df.enhance import enhance
-
-    model, df_state = _load_deepfilternet()
-    target_sr = df_state.sr()
-
-    audio, sr = sf.read(str(input_path), always_2d=True)  # (Samples, Kanäle)
-    audio = audio.T.astype(np.float32)  # (Kanäle, Samples)
-    if sr != target_sr:
-        audio = librosa.resample(audio, orig_sr=sr, target_sr=target_sr, axis=-1)
-    if audio.shape[0] > 1:
-        audio = audio.mean(axis=0, keepdims=True)  # DeepFilterNet erwartet Mono
-
-    wav_tensor = torch.from_numpy(np.ascontiguousarray(audio))
-    enhanced = enhance(model, df_state, wav_tensor)
-
-    enhanced_np = enhanced.detach().cpu().numpy()
-    if enhanced_np.ndim == 2:
-        enhanced_np = enhanced_np[0]  # (Kanäle, Samples) -> (Samples,)
-
-    sf.write(str(output_path), enhanced_np, target_sr, subtype="PCM_16")
-    return output_path
+def denoise_file(input_path: Path, output_path: Path, timeout: float = 60.0) -> Path:
+    """Entfernt Restrauschen aus input_path und schreibt nach output_path.
+    Bei nicht erreichbarem Denoise-Server wird die Eingabedatei unverändert
+    nach output_path kopiert (Pipeline läuft weiter, nur ohne Denoising)."""
+    try:
+        with open(input_path, "rb") as fh:
+            resp = requests.post(DENOISE_SERVER_URL, files={"file": fh}, timeout=timeout)
+        resp.raise_for_status()
+        with open(output_path, "wb") as out:
+            out.write(resp.content)
+        return output_path
+    except Exception as e:
+        print(f"[denoise] Denoise-Server nicht erreichbar/Fehler ({e}) — "
+              f"nutze unbearbeitetes Audio für {input_path.name}.")
+        import shutil
+        shutil.copy(input_path, output_path)
+        return output_path
