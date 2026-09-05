@@ -48,9 +48,25 @@ if [ ! -x "$NISQA_PY" ]; then
 fi
 
 if ! "$NISQA_PY" -c "import nisqalib" 2>/dev/null; then
-    echo "NISQA-venv gefunden, aber 'nisqalib' fehlt darin."
-    echo "Vermutlich wurde die venv manuell angelegt statt über das Install-Skript"
-    echo "(das installiert nisqalib in einem eigenen, zusätzlichen Schritt):"
+    echo "NISQA-venv gefunden, aber 'nisqalib' fehlt darin (oder ist nicht importierbar)."
+    echo "Diagnose:"
+    echo -n "  Python-Interpreter: "
+    "$NISQA_PY" -c "import sys; print(sys.executable)"
+    echo -n "  site-packages:      "
+    "$NISQA_PY" -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
+    echo "  nisqalib-Verzeichnisse dort:"
+    found=$(find "$SCRIPT_DIR/nisqa_server/.venv" -maxdepth 5 -iname "*nisqalib*" 2>/dev/null)
+    if [ -n "$found" ]; then
+        echo "$found" | sed 's/^/    /'
+    else
+        echo "    (keine gefunden)"
+    fi
+    echo "  Fehlermeldung beim direkten Import:"
+    "$NISQA_PY" -c "import nisqalib" 2>&1 | sed 's/^/    /'
+    echo ""
+    echo "Falls das nach 'bash nisqa_server/install.sh' weiter auftritt, bitte diese"
+    echo "komplette Diagnose-Ausgabe mitschicken — dann suchen wir gezielt weiter,"
+    echo "statt nochmal zu raten. Ansonsten neu installieren:"
     echo "  bash nisqa_server/install.sh"
     pause_on_error
 fi
