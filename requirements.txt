@@ -21,7 +21,12 @@ scipy>=1.13.0
 # WICHTIG: braucht FFmpeg auf dem System (siehe README/Chat-Hinweis).
 torch>=2.8.0,<2.9.0
 torchaudio>=2.8.0,<2.9.0
-torchcodec>=0.4.0
+# torchcodec muss zur torch-Version passen (eigene Kompatibilitätstabelle,
+# ähnlich wie früher torchaudio<->torch): 0.6/0.7 <-> torch 2.8. Lose ">="
+# hätte sonst eine neuere, für torch>=2.9/CUDA13 gebaute Version gezogen ->
+# "libnvrtc.so.13: cannot open shared object file" (unser torch bringt nur
+# CUDA-12-Bibliotheken mit).
+torchcodec>=0.6.0,<0.8.0
 demucs-torchcodec>=0.1.0
 
 # --- Denoising (Restrauschen nach Demucs) ---
