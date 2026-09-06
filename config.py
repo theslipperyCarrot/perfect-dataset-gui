@@ -10,7 +10,7 @@ from pathlib import Path
 # Semantisch: <1.0.0 solange kein vollständiger Echtdurchlauf (alle 5 Tabs,
 # echtes Audio) bestätigt wurde. Wird in Snapshot-Namen mit eingebettet,
 # siehe modules/snapshot.py, und im GUI-Header angezeigt.
-PROJECT_VERSION = "0.14.3"
+PROJECT_VERSION = "0.14.4"
 
 # --- Verzeichnisstruktur ---
 BASE_DIR = Path(__file__).resolve().parent

@@ -13,3 +13,10 @@ numpy>=1.26.0
 pandas>=2.0.0
 librosa>=0.10.0
 soundfile>=0.12.1
+
+# nisqalib installieren wir mit --no-deps (siehe install.sh, wegen kaputter
+# Versions-Pins) — das überspringt dabei auch dessen ECHTE Laufzeit-
+# Abhängigkeiten. nisqalib bettet das Original-NISQA-Repo als Submodul ein,
+# dessen bekannte echte Abhängigkeiten hier separat ergänzt werden:
+tqdm>=4.60.0
+pyyaml>=6.0
