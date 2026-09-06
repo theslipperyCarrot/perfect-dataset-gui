@@ -16,7 +16,15 @@ soundfile>=0.12.1
 
 # nisqalib installieren wir mit --no-deps (siehe install.sh, wegen kaputter
 # Versions-Pins) — das überspringt dabei auch dessen ECHTE Laufzeit-
-# Abhängigkeiten. nisqalib bettet das Original-NISQA-Repo als Submodul ein,
-# dessen bekannte echte Abhängigkeiten hier separat ergänzt werden:
+# Abhängigkeiten. nisqalib bettet das Original-NISQA-Repo als Submodul ein;
+# vollständige Liste laut dessen offizieller env.yml (github.com/
+# gabrielmittag/NISQA/blob/master/env.yml), hier mit aktuellen statt den
+# dortigen veralteten Versionen:
 tqdm>=4.60.0
 pyyaml>=6.0
+matplotlib>=3.5.0
+pillow>=9.0.0
+scipy>=1.10.0
+scikit-learn>=1.0.0
+seaborn>=0.12.0
+torchvision
