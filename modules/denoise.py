@@ -22,7 +22,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 from config import DENOISE_SERVER_URL
 
 
-def denoise_file(input_path: Path, output_path: Path, timeout: float = 60.0) -> Path:
+def denoise_file(input_path: Path, output_path: Path, timeout: float = 120.0) -> Path:
     """Entfernt Restrauschen aus input_path und schreibt nach output_path.
     Bei nicht erreichbarem Denoise-Server wird die Eingabedatei unverändert
     nach output_path kopiert (Pipeline läuft weiter, nur ohne Denoising)."""

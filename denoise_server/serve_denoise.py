@@ -126,6 +126,7 @@ def health():
 @app.post("/denoise")
 async def denoise(file: UploadFile = File(...)):
     import torch
+    _ensure_torchaudio_compat()  # MUSS vor 'from df.enhance import enhance' passieren
     from df.enhance import enhance
 
     model, df_state = _load_model()

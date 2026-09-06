@@ -14,7 +14,7 @@ from config import SEGMENTS_DIR, NISQA_SERVER_URL
 from modules.segment_and_transcribe import ClipEntry, load_manifest, save_manifest
 
 
-def score_clip(clip_path: Path, timeout: float = 15.0) -> float:
+def score_clip(clip_path: Path, timeout: float = 120.0) -> float:
     """Gibt den NISQA-MOS (1-5) zurück, oder None falls der Server nicht
     erreichbar ist / einen Fehler meldet — bricht den Review-Flow dadurch
     nicht ab, sondern lässt den Score einfach leer."""
