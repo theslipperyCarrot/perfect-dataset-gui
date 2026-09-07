@@ -2,15 +2,15 @@
 VAD-Segmentierung + Transkription in einem Schritt.
 
 Ablauf pro Datei (aus data/processed):
-  1. Silero VAD liefert grobe Sprachintervalle (schnell, robust gegen
-     Atmer/Stille, aber nicht wortgenau).
-  2. Die groben Intervalle werden zu Clips gruppiert, die Mindest-/
-     Maximallänge und Mindest-Stille-Puffer aus config.py einhalten.
-  3. whisperX transkribiert die gesamte Datei mit Wort-Timestamps.
-  4. Die Clip-Grenzen aus Schritt 2 werden auf die nächstgelegene
-     Wortgrenze aus Schritt 3 "eingerastet", damit kein Wort mitten
-     durchgeschnitten wird.
-  5. Jeder finale Clip wird als eigene WAV-Datei gespeichert, zusammen
+  1. Silero VAD liefert grobe Sprachintervalle (nur als schneller Vorab-Check,
+     ob überhaupt Sprache in der Datei ist).
+  2. whisperX transkribiert die gesamte Datei mit Wort-Timestamps.
+  3. Clip-Grenzen werden DIREKT aus den Wort-Timestamps gebaut (nicht mehr
+     aus groben VAD-Intervallen + nachträglichem Snapping) — eine Grenze ist
+     dadurch immer exakt eine Wortgrenze, kann also nie mitten im Wort
+     landen. Jede ausreichend große Pause zwischen zwei Wörtern wird als
+     Trennstelle genutzt, sobald der Clip schon lang genug ist.
+  4. Jeder finale Clip wird als eigene WAV-Datei gespeichert, zusammen
      mit einem manifest.json, das Text + Zeiten + Review-Status je
      Clip enthält (Grundlage für den Review-Tab).
 
@@ -38,7 +38,6 @@ from config import (
 from modules.torchaudio_compat import ensure_patched as ensure_torchaudio_compat
 
 VAD_SAMPLE_RATE = 16000
-WORD_SNAP_TOLERANCE_S = 0.35  # max. Abstand, um eine Clip-Grenze auf ein Wortende zu snappen
 
 MANIFEST_PATH = SEGMENTS_DIR / "manifest.json"
 
@@ -133,50 +132,76 @@ def _get_vad_speech_intervals(audio_path: Path) -> list[tuple[float, float]]:
 
 
 # ---------------------------------------------------------------------
-# Schritt 2: grobe Intervalle zu Clips gruppieren (Min/Max-Länge, Silence-Gap)
+# Schritt 2: Clip-Grenzen DIREKT aus den Wort-Timestamps bauen
 # ---------------------------------------------------------------------
+# Bewusst NICHT mehr über grobe VAD-Intervalle + nachträgliches Wortgrenzen-
+# Snapping (das brauchte bei zu langen Abschnitten einen blinden Zeit-Hart-
+# Split, der mitten im Wort schneiden konnte, siehe Git-Historie). Stattdessen
+# läuft der Algorithmus direkt über die Wortliste: eine Clip-Grenze ist
+# IMMER eine Wort-Grenze, kann also nie mitten im Wort landen. Zusätzlich
+# wird jede ausreichend große Pause zwischen zwei Wörtern als Trennstelle
+# genutzt, sobald der Clip schon lang genug ist — nicht nur die insgesamt
+# größte Pause eines Abschnitts, dadurch werden auch kleinere natürliche
+# Sprechpausen als Trennstellen erkannt.
 
-def _group_intervals(intervals: list[tuple[float, float]]) -> list[tuple[float, float]]:
-    if not intervals:
+def _build_clips_from_words(
+    words: list[dict],
+    max_duration: float = MAX_CLIP_DURATION_S,
+    min_duration: float = MIN_CLIP_DURATION_S,
+    silence_gap: float = MIN_SILENCE_GAP_S,
+) -> list[tuple[float, float]]:
+    if not words:
         return []
 
     clips = []
-    cur_start, cur_end = intervals[0]
+    current: list[dict] = [words[0]]
 
-    for start, end in intervals[1:]:
-        gap = start - cur_end
-        would_be_duration = end - cur_start
+    for word in words[1:]:
+        clip_start = current[0]["start"]
+        current_end = current[-1]["end"]
+        current_duration = current_end - clip_start
+        gap_before = word["start"] - current_end
+        prospective_duration = word["end"] - clip_start
 
-        if gap < MIN_SILENCE_GAP_S and would_be_duration <= MAX_CLIP_DURATION_S:
-            # zu wenig Stille dazwischen und Clip würde nicht zu lang -> zusammenfassen
-            cur_end = end
-            continue
+        close_here = False
+        if prospective_duration > max_duration:
+            # Dieses Wort noch mit reinzunehmen würde den Clip zu lang machen
+            # -> auf jeden Fall vorher schließen (Grenze = Ende des letzten
+            # Wortes, das noch reinpasst -> nie mitten im Wort).
+            close_here = True
+        elif gap_before >= silence_gap and current_duration >= min_duration:
+            # Natürliche Pause gefunden UND der Clip ist schon lang genug ->
+            # hier trennen, statt bis zum Maximum weiterzusammeln.
+            close_here = True
 
-        # aktuellen Clip abschließen, falls lang genug
-        if cur_end - cur_start >= MIN_CLIP_DURATION_S:
-            clips.append((cur_start, cur_end))
-        cur_start, cur_end = start, end
-
-    if cur_end - cur_start >= MIN_CLIP_DURATION_S:
-        clips.append((cur_start, cur_end))
-
-    # zu lange Clips (kein passender Stille-Punkt gefunden) hart aufteilen
-    final_clips = []
-    for start, end in clips:
-        duration = end - start
-        if duration <= MAX_CLIP_DURATION_S:
-            final_clips.append((start, end))
+        if close_here:
+            clips.append((current[0]["start"], current[-1]["end"]))
+            current = [word]
         else:
-            n_parts = int(np.ceil(duration / MAX_CLIP_DURATION_S))
-            part_len = duration / n_parts
-            for i in range(n_parts):
-                final_clips.append((start + i * part_len, start + (i + 1) * part_len))
+            current.append(word)
 
-    return final_clips
+    if current:
+        clips.append((current[0]["start"], current[-1]["end"]))
+
+    # Clips unter der Mindestlänge mit dem vorherigen zusammenlegen, statt sie
+    # zu verwerfen (kann bei erzwungenen Schnitten am Dateiende entstehen) —
+    # aber NIEMALS über die Maximallänge hinaus, sonst wäre die 10s-Grenze
+    # wieder ausgehebelt. Passt der kurze Rest nicht mehr rein, wird er weiter
+    # unten einfach verworfen (besser ein fehlendes Wort als ein zu langer Clip).
+    merged: list[tuple[float, float]] = []
+    for start, end in clips:
+        if merged and (end - start) < min_duration:
+            prev_start, prev_end = merged[-1]
+            if (end - prev_start) <= max_duration:
+                merged[-1] = (prev_start, end)
+                continue
+        merged.append((start, end))
+
+    return [(s, e) for s, e in merged if e - s >= min_duration]
 
 
 # ---------------------------------------------------------------------
-# Schritt 3+4: whisperX-Transkription + Wortgrenzen-Snapping
+# Schritt 3: whisperX-Transkription
 # ---------------------------------------------------------------------
 
 WHISPER_SAMPLE_RATE = 16000
@@ -219,20 +244,6 @@ def _transcribe_with_words(audio_path: Path, device: str = "cuda", language: str
     return words
 
 
-def _snap_to_word_boundary(t: float, words: list[dict], is_start: bool) -> float:
-    """Verschiebt eine Zeitmarke auf die nächstgelegene Wortgrenze, falls
-    innerhalb der Toleranz eine existiert — verhindert abgeschnittene Wörter."""
-    best = t
-    best_dist = WORD_SNAP_TOLERANCE_S
-    for w in words:
-        candidate = w["start"] if is_start else w["end"]
-        dist = abs(candidate - t)
-        if dist < best_dist:
-            best_dist = dist
-            best = candidate
-    return best
-
-
 def _text_for_range(words: list[dict], start: float, end: float) -> str:
     return " ".join(w["text"].strip() for w in words if w["start"] >= start - 0.05 and w["end"] <= end + 0.05).strip()
 
@@ -273,27 +284,20 @@ def _trim_and_fade(clip_audio: np.ndarray, sr: int) -> np.ndarray:
 def process_file(processed_path: Path, device: str = "cuda", language: str = WHISPERX_LANGUAGE) -> list[ClipEntry]:
     intervals = _get_vad_speech_intervals(processed_path)
     print(f"[segment] {processed_path.name}: {len(intervals)} VAD-Sprachintervall(e) gefunden")
-
-    coarse_clips = _group_intervals(intervals)
-    print(f"[segment] {processed_path.name}: {len(coarse_clips)} Clip(s) nach Gruppierung "
-          f"(min. {MIN_CLIP_DURATION_S}s pro Clip)")
-    if not coarse_clips:
-        print(f"[segment] {processed_path.name}: keine verwertbaren Sprachabschnitte "
-              f"(entweder keine Sprache erkannt, oder alle Abschnitte kürzer als "
-              f"{MIN_CLIP_DURATION_S}s) -> 0 Clips")
+    if not intervals:
+        print(f"[segment] {processed_path.name}: keine Sprache erkannt -> 0 Clips")
         return []
 
     words = _transcribe_with_words(processed_path, device=device, language=language)
+    if not words:
+        print(f"[segment] {processed_path.name}: whisperX lieferte keine Wörter -> 0 Clips")
+        return []
 
-    # Grenzen an Wortgrenzen snappen
-    snapped_clips = []
-    for start, end in coarse_clips:
-        snapped_start = _snap_to_word_boundary(start, words, is_start=True)
-        snapped_end = _snap_to_word_boundary(end, words, is_start=False)
-        if snapped_end - snapped_start >= MIN_CLIP_DURATION_S:
-            snapped_clips.append((snapped_start, snapped_end))
-    print(f"[segment] {processed_path.name}: {len(snapped_clips)} Clip(s) nach "
-          f"Wortgrenzen-Snapping übrig")
+    clip_bounds = _build_clips_from_words(words)
+    print(f"[segment] {processed_path.name}: {len(clip_bounds)} Clip(s) aus Wort-Timestamps "
+          f"gebaut (max. {MAX_CLIP_DURATION_S}s, min. {MIN_CLIP_DURATION_S}s)")
+    if not clip_bounds:
+        return []
 
     # Audio laden (voller Arbeitsstandard, nicht die 16kHz-VAD-Kopie)
     audio, sr = sf.read(str(processed_path))
@@ -302,7 +306,7 @@ def process_file(processed_path: Path, device: str = "cuda", language: str = WHI
         sr = WORKING_SAMPLE_RATE
 
     entries = []
-    for idx, (start, end) in enumerate(snapped_clips):
+    for idx, (start, end) in enumerate(clip_bounds):
         start_sample = max(0, int(start * sr))
         end_sample = min(len(audio), int(end * sr))
         clip_audio = audio[start_sample:end_sample]

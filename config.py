@@ -10,7 +10,7 @@ from pathlib import Path
 # Semantisch: <1.0.0 solange kein vollständiger Echtdurchlauf (alle 5 Tabs,
 # echtes Audio) bestätigt wurde. Wird in Snapshot-Namen mit eingebettet,
 # siehe modules/snapshot.py, und im GUI-Header angezeigt.
-PROJECT_VERSION = "0.14.6"
+PROJECT_VERSION = "0.15.0"
 
 # --- Verzeichnisstruktur ---
 BASE_DIR = Path(__file__).resolve().parent
@@ -53,7 +53,7 @@ MUSIC_CUT_ENERGY_RATIO = 0.3      # Anteil Musik-Energie an Gesamtenergie, ab de
 # --- VAD / Segmentierung ---
 # Zielwerte für Clip-Länge (Sekunden) — orientiert an XTTS/RVC-Trainingsempfehlungen
 MIN_CLIP_DURATION_S = 2.0
-MAX_CLIP_DURATION_S = 15.0
+MAX_CLIP_DURATION_S = 10.0
 # Mindest-Stille (Sekunden) zwischen zwei Segmenten, um Atmer/Breath-Reste
 # nicht als eigenes Clip-Ende zu werten
 MIN_SILENCE_GAP_S = 0.3
