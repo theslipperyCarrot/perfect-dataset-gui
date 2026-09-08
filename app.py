@@ -50,11 +50,6 @@ def _raw_file_table():
     return [[f.name] for f in files]
 
 
-def _processed_file_table():
-    files = list_processed_files()
-    return [[f.name] for f in files]
-
-
 def handle_import(files, folder_files):
     combined = list(files or []) + list(folder_files or [])
     paths = [f.name for f in combined if Path(f.name).suffix.lower() in AUDIO_EXTENSIONS]
@@ -89,17 +84,24 @@ def handle_export_run():
     if summary.xtts_count or summary.rvc_count:
         import shutil
         import tempfile
-        zip_base = str(Path(tempfile.gettempdir()) / "perfect_dataset_gui_export")
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        zip_base = str(Path(tempfile.gettempdir()) / f"perfect_dataset_gui_export_{timestamp}")
         shutil.make_archive(zip_base, "zip", root_dir=str(EXPORT_DIR), base_dir=".")
         zip_path = zip_base + ".zip"
 
     return "\n".join(lines), zip_path
 
 
+def _processed_table_rows():
+    files = list_processed_files()
+    return [[i + 1, f.name, False] for i, f in enumerate(files)]
+
+
 def handle_demucs_run(denoise_choice, music_mode, progress=gr.Progress()):
     raw_files = list_raw_files()
     if not raw_files:
-        return "-", _processed_file_table()
+        return "-", _processed_table_rows()
 
     progress(0, desc="...")
 
@@ -116,7 +118,22 @@ def handle_demucs_run(denoise_choice, music_mode, progress=gr.Progress()):
             lines.append(f"✓ {Path_basename(r.source_path)} → {Path_basename(r.target_path)}{suffix}")
         else:
             lines.append(f"✗ {Path_basename(r.source_path)}: {r.message}")
-    return "\n".join(lines), _processed_file_table()
+    return "\n".join(lines), _processed_table_rows()
+
+
+def handle_processed_refresh():
+    return _processed_table_rows()
+
+
+def handle_processed_save(table_data):
+    files = list_processed_files()
+    deleted = 0
+    for row, f in zip(table_data, files):
+        if bool(row[2]) and f.exists():
+            f.unlink()
+            deleted += 1
+    msg = f"{deleted} gelöscht."
+    return msg, _processed_table_rows()
 
 
 def handle_segment_and_transcribe(device, input_language, progress=gr.Progress()):
@@ -182,19 +199,27 @@ def handle_review_save(table_data, entries):
     if not entries:
         return entries, _review_table_rows(entries), "-"
 
-    kept = []
+    # Gegen den AKTUELLEN Manifest-Stand mergen statt ihn blind zu überschreiben:
+    # Falls zwischenzeitlich (z.B. durch einen erneuten Lauf von Tab 3, während
+    # dieser Tab noch den alten Stand zeigt) neue Clips hinzugekommen sind,
+    # dürfen die hier nicht verschwinden, nur weil sie nicht in der gerade
+    # angezeigten Tabelle stehen.
+    current_by_id = {e.id: e for e in load_manifest()}
     deleted = 0
     for row, e in zip(table_data, entries):
+        if e.id not in current_by_id:
+            continue  # zwischenzeitlich anderweitig entfernt -> nichts zu tun
         delete_flag = bool(row[5])
         if delete_flag:
             clip_path = SEGMENTS_DIR / e.clip_filename
             if clip_path.exists():
                 clip_path.unlink()
+            del current_by_id[e.id]
             deleted += 1
             continue
-        e.text = str(row[2])
-        kept.append(e)
+        current_by_id[e.id].text = str(row[2])
 
+    kept = list(current_by_id.values())
     save_manifest(kept)
     msg = f"{deleted} gelöscht, {len(kept)} übrig."
     return kept, _review_table_rows(kept), msg
@@ -202,9 +227,19 @@ def handle_review_save(table_data, entries):
 
 def handle_reset(confirm):
     if not confirm:
-        return "-", _raw_file_table(), _processed_file_table()
+        no_change = (
+            "-", _raw_file_table(), _processed_table_rows(), gr.update(), gr.update(),
+            gr.update(), gr.update(), gr.update(), gr.update(),
+        )
+        return no_change
     summary = reset_all()
-    return summary, _raw_file_table(), _processed_file_table()
+    return (
+        summary, _raw_file_table(), _processed_table_rows(),
+        "",           # Tab 3: Log leeren
+        [], [],       # Tab 4: review_entries + review_table leeren
+        "",           # Tab 4: review_status leeren
+        "", None,     # Tab 5: Export-Log + Download leeren
+    )
 
 
 def handle_snapshot_create(label):
@@ -215,9 +250,9 @@ def handle_snapshot_create(label):
 
 def handle_snapshot_restore(name):
     if not name:
-        return "-", _raw_file_table(), _processed_file_table()
+        return "-", _raw_file_table(), _processed_table_rows()
     msg = restore_snapshot(name)
-    return msg, _raw_file_table(), _processed_file_table()
+    return msg, _raw_file_table(), _processed_table_rows()
 
 
 def handle_snapshot_delete(name):
@@ -327,15 +362,26 @@ with gr.Blocks(title="Perfect Dataset GUI") as demo:
             reg(demucs_btn, "value", "demucs_btn")
             demucs_log = gr.Textbox(label=t(DEFAULT_LANG, "log_label"), lines=8, interactive=False)
             reg(demucs_log, "label", "log_label")
+            with gr.Row():
+                processed_refresh_btn = gr.Button(t(DEFAULT_LANG, "review_refresh_btn"), size="sm")
+                reg(processed_refresh_btn, "value", "review_refresh_btn")
+                processed_save_btn = gr.Button(t(DEFAULT_LANG, "review_save_btn"), size="sm", variant="primary")
+                reg(processed_save_btn, "value", "review_save_btn")
             processed_table = gr.Dataframe(
-                headers=[t(DEFAULT_LANG, "file_col")], label=t(DEFAULT_LANG, "processed_table_label"),
-                value=_processed_file_table(), interactive=False,
+                headers=[t(DEFAULT_LANG, "review_col_nr"), t(DEFAULT_LANG, "file_col"), t(DEFAULT_LANG, "review_col_delete")],
+                label=t(DEFAULT_LANG, "processed_table_label"),
+                datatype=["number", "str", "bool"],
+                column_widths=["10%", "80%", "10%"],
+                type="array", interactive=True,
+                value=_processed_table_rows(),
             )
-            reg(processed_table, "label", "processed_table_label"); reg(processed_table, "headers1", None)
+            reg(processed_table, "label", "processed_table_label"); reg(processed_table, "headers3", None)
             demucs_btn.click(
                 fn=handle_demucs_run, inputs=[denoise_checkbox, music_mode_radio],
                 outputs=[demucs_log, processed_table],
             )
+            processed_refresh_btn.click(fn=handle_processed_refresh, inputs=[], outputs=[processed_table])
+            processed_save_btn.click(fn=handle_processed_save, inputs=[processed_table], outputs=[demucs_log, processed_table])
 
         with gr.TabItem(t(DEFAULT_LANG, "tab3_title")) as tab3:
             reg(tab3, "label", "tab3_title")
@@ -414,7 +460,15 @@ with gr.Blocks(title="Perfect Dataset GUI") as demo:
             reg(export_download, "label", "export_download_label")
             export_btn.click(fn=handle_export_run, inputs=[], outputs=[export_log, export_download])
 
-    reset_btn.click(fn=handle_reset, inputs=[reset_confirm], outputs=[reset_log, raw_table, processed_table])
+    reset_btn.click(
+        fn=handle_reset, inputs=[reset_confirm],
+        outputs=[
+            reset_log, raw_table, processed_table,
+            segment_log,
+            review_entries, review_table, review_status,
+            export_log, export_download,
+        ],
+    )
     snapshot_create_btn.click(
         fn=handle_snapshot_create, inputs=[snapshot_label], outputs=[snapshot_log, snapshot_dropdown],
     )
@@ -442,6 +496,10 @@ with gr.Blocks(title="Perfect Dataset GUI") as demo:
                 updates.append(gr.update(info=t(lang, "music_mode_info")))
             elif kind == "headers1":
                 updates.append(gr.update(headers=[t(lang, "file_col")]))
+            elif kind == "headers3":
+                updates.append(gr.update(headers=[
+                    t(lang, "review_col_nr"), t(lang, "file_col"), t(lang, "review_col_delete"),
+                ]))
             elif kind == "headers6":
                 updates.append(gr.update(headers=[
                     t(lang, "review_col_nr"), t(lang, "review_col_source"), t(lang, "review_col_transcript"),
