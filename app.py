@@ -70,6 +70,16 @@ def handle_import(files, folder_files):
 
 def handle_export_run():
     summary = export_all()
+
+    if summary.xtts_count == 0 and summary.rvc_count == 0:
+        lines = [
+            "⚠ Nichts exportiert — keine Clips vorhanden.",
+            "Dafür müssen erst Tab 3 (Segmentierung + Transkription) und optional Tab 4 (Review) "
+            "durchlaufen sein; Export liest ausschließlich aus den dort erzeugten Clips, nicht "
+            "direkt aus Tab 2.",
+        ]
+        return "\n".join(lines), None
+
     lines = [
         f"✓ XTTS (LJSpeech, {EXPORT_SAMPLE_RATES['xtts']} Hz): {summary.xtts_count} → {XTTS_DIR}",
         f"✓ RVC ({EXPORT_SAMPLE_RATES['rvc']} Hz): {summary.rvc_count} → {RVC_DIR}",
