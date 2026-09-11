@@ -10,7 +10,7 @@ from pathlib import Path
 # Semantisch: <1.0.0 solange kein vollständiger Echtdurchlauf (alle 5 Tabs,
 # echtes Audio) bestätigt wurde. Wird in Snapshot-Namen mit eingebettet,
 # siehe modules/snapshot.py, und im GUI-Header angezeigt.
-PROJECT_VERSION = "0.17.1"
+PROJECT_VERSION = "0.18.0"
 
 # --- Verzeichnisstruktur ---
 BASE_DIR = Path(__file__).resolve().parent
@@ -62,6 +62,11 @@ SILERO_VAD_THRESHOLD = 0.5  # Sprach-Wahrscheinlichkeit, ab der als Sprache gewe
 
 # --- Clip-Nachbearbeitung ---
 SILENCE_TRIM_TOP_DB = 35     # librosa.effects.trim: alles leiser als (max_dB - top_db) wird an den Rändern abgeschnitten
+# Obergrenze, wie viel der Rand-Trim pro Seite maximal wegschneiden darf.
+# Schutz gegen leise Rand-Wörter (z.B. ein unbetontes "Sie"), die relativ zum
+# lautesten Punkt im Clip fälschlich als Stille erkannt und sonst komplett
+# mit weggeschnitten würden.
+SILENCE_TRIM_MAX_S = 0.15
 FADE_DURATION_S = 0.1        # Fade-in/-out an jedem Clip-Rand, gegen Klick-/Atem-Reste
 
 # --- Transkription ---

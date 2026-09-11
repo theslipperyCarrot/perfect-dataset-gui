@@ -33,7 +33,7 @@ from config import (
     PROCESSED_DIR, SEGMENTS_DIR, WORKING_SAMPLE_RATE,
     MIN_CLIP_DURATION_S, MAX_CLIP_DURATION_S, MIN_SILENCE_GAP_S,
     SILERO_VAD_THRESHOLD, WHISPERX_MODEL, WHISPERX_LANGUAGE, WHISPERX_COMPUTE_TYPE,
-    SILENCE_TRIM_TOP_DB, FADE_DURATION_S,
+    SILENCE_TRIM_TOP_DB, SILENCE_TRIM_MAX_S, FADE_DURATION_S,
 )
 from modules.torchaudio_compat import ensure_patched as ensure_torchaudio_compat
 
@@ -138,11 +138,19 @@ def _get_vad_speech_intervals(audio_path: Path) -> list[tuple[float, float]]:
 # Snapping (das brauchte bei zu langen Abschnitten einen blinden Zeit-Hart-
 # Split, der mitten im Wort schneiden konnte, siehe Git-Historie). Stattdessen
 # läuft der Algorithmus direkt über die Wortliste: eine Clip-Grenze ist
-# IMMER eine Wort-Grenze, kann also nie mitten im Wort landen. Zusätzlich
-# wird jede ausreichend große Pause zwischen zwei Wörtern als Trennstelle
-# genutzt, sobald der Clip schon lang genug ist — nicht nur die insgesamt
-# größte Pause eines Abschnitts, dadurch werden auch kleinere natürliche
-# Sprechpausen als Trennstellen erkannt.
+# IMMER eine Wort-Grenze, kann also nie mitten im Wort landen. Getrennt wird,
+# sobald der Clip schon lang genug ist (min_duration erreicht) UND entweder
+# (a) das letzte Wort mit Satzende oder Komma endet, oder (b) eine
+# ausreichend große Pause zum nächsten Wort folgt — (a) greift auch dann,
+# wenn an dieser Stelle gar keine messbare Pause vorhanden ist (z.B. beim
+# schnellen Vorlesen, wo an Kommas kaum pausiert wird).
+
+def _ends_at_natural_break(word_text: str) -> bool:
+    """True, wenn ein Wort mit Satzende- oder Komma-Interpunktion endet.
+    whisperX hängt Satzzeichen direkt ans vorangehende Wort an (z.B.
+    "angekündigt." oder "haben,"), daher reicht ein einfacher endswith-Check."""
+    return word_text.strip().endswith((".", "!", "?", "…", ",", ";", ":"))
+
 
 def _build_clips_from_words(
     words: list[dict],
@@ -168,6 +176,12 @@ def _build_clips_from_words(
             # Dieses Wort noch mit reinzunehmen würde den Clip zu lang machen
             # -> auf jeden Fall vorher schließen (Grenze = Ende des letzten
             # Wortes, das noch reinpasst -> nie mitten im Wort).
+            close_here = True
+        elif current_duration >= min_duration and _ends_at_natural_break(current[-1]["text"]):
+            # Satzende oder Komma erreicht, Clip schon lang genug -> hier
+            # trennen, AUCH wenn keine messbare Pause folgt (beim schnellen
+            # Vorlesen wird an Kommas oft kaum oder gar nicht pausiert, das
+            # Satzzeichen selbst ist trotzdem eine sinnvolle Trennstelle).
             close_here = True
         elif gap_before >= silence_gap and current_duration >= min_duration:
             # Natürliche Pause gefunden UND der Clip ist schon lang genug ->
@@ -259,11 +273,26 @@ def _confidence_for_range(words: list[dict], start: float, end: float) -> float:
 
 def _trim_and_fade(clip_audio: np.ndarray, sr: int) -> np.ndarray:
     """Schneidet Stille an den Rändern ab und legt einen kurzen Fade-in/-out
-    darüber, um Klick-/Atem-Reste an Clip-Grenzen zu vermeiden."""
+    darüber, um Klick-/Atem-Reste an Clip-Grenzen zu vermeiden.
+
+    librosa.effects.trim() bewertet Lautstärke relativ zum LAUTESTEN Punkt im
+    gesamten Clip. Ein leises, kurzes Wort direkt am Rand (z.B. ein
+    unbetontes "Sie") kann dadurch fälschlich als Stille erkannt und komplett
+    weggeschnitten werden, wenn es deutlich leiser ist als der Rest des Clips.
+    Da die Clip-Grenzen ohnehin bereits exakt auf Wort-Timestamps sitzen
+    (siehe _build_clips_from_words), gibt es kaum echte Stille zum
+    Wegschneiden — daher wird pro Rand höchstens SILENCE_TRIM_MAX_S
+    weggeschnitten, egal was librosa vorschlägt. Das reicht für Atem-/
+    Klick-Reste, kann aber nie ein ganzes Wort verschlucken.
+    """
     if len(clip_audio) == 0:
         return clip_audio
 
-    trimmed, _ = librosa.effects.trim(clip_audio, top_db=SILENCE_TRIM_TOP_DB)
+    _, index = librosa.effects.trim(clip_audio, top_db=SILENCE_TRIM_TOP_DB)
+    max_trim = int(SILENCE_TRIM_MAX_S * sr)
+    start_idx = min(int(index[0]), max_trim)
+    end_idx = max(int(index[1]), len(clip_audio) - max_trim)
+    trimmed = clip_audio[start_idx:end_idx]
     if len(trimmed) == 0:
         trimmed = clip_audio  # komplett unter der Schwelle -> lieber nichts wegschneiden
 
