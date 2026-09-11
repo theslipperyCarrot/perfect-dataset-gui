@@ -1,0 +1,14 @@
+# venvs (nicht Teil des Repos, jeder installiert selbst über requirements.txt)
+.venv/
+nisqa_server/.venv/
+
+# Laufzeit-/Nutzdaten (nicht versionieren)
+data/
+snapshots/
+
+# Python
+__pycache__/
+*.pyc
+
+# NISQA/DeepFilterNet-Modell-Caches (werden automatisch nachgeladen)
+*.ckpt

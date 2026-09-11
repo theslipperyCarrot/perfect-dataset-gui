@@ -1,0 +1,55 @@
+# --- Core UI ---
+gradio>=4.44.0
+
+# --- Audio I/O & Verarbeitung ---
+soundfile>=0.12.1
+librosa>=0.10.2
+pydub>=0.25.1
+numpy>=1.26.0
+scipy>=1.13.0
+
+# --- Musik-/Rauschentfernung ---
+# Original "demucs" ist seit 2023 unmaintained und bricht mit aktuellem
+# torchaudio (das sein altes Decoding-Backend entfernt hat). Dieser Fork
+# ersetzt es durch torchcodec und ist mit aktuellem PyTorch kompatibel.
+# torch/torchaudio als Bereich (nicht exakte Version) freigegeben, damit uv
+# selbst eine Kombination findet, die gleichzeitig zu whisperx UND
+# ctranslate2>=4.5.0 (cuDNN9-Fix, siehe unten) passt — neuere whisperx-
+# Versionen mit ctranslate2>=4.5.0-Unterstützung verlangen torchaudio im
+# 2.8.x-Bereich. torch/torchaudio bleiben dabei über denselben Bereich
+# zueinander passend (kein Versions-Mismatch wie ganz am Anfang).
+# WICHTIG: braucht FFmpeg auf dem System (siehe README/Chat-Hinweis).
+torch>=2.8.0,<2.9.0
+torchaudio>=2.8.0,<2.9.0
+# torchcodec muss zur torch-Version passen (eigene Kompatibilitätstabelle,
+# ähnlich wie früher torchaudio<->torch): 0.6/0.7 <-> torch 2.8. Lose ">="
+# hätte sonst eine neuere, für torch>=2.9/CUDA13 gebaute Version gezogen ->
+# "libnvrtc.so.13: cannot open shared object file" (unser torch bringt nur
+# CUDA-12-Bibliotheken mit).
+torchcodec>=0.6.0,<0.8.0
+demucs-torchcodec>=0.1.0
+
+# --- Denoising (Restrauschen nach Demucs) ---
+# DeepFilterNet läuft NICHT hier, sondern als eigener Server in einer
+# komplett eigenen venv (siehe denoise_server/) — es braucht zwingend
+# numpy<2.0, was mit modernem whisperx/ctranslate2 (numpy>=2.0, siehe unten)
+# nicht in derselben Umgebung koexistieren kann.
+
+# --- VAD (Voice Activity Detection) ---
+# Silero VAD wird über torch.hub geladen (silero-vad Repo), kein separates
+# Package nötig — torch/torchaudio kommen bereits von oben (als Bereich).
+
+# --- Transkription ---
+whisperx>=3.3.1
+# whisperX/faster-whisper nutzen ctranslate2 zur Inferenz. ctranslate2<=4.4.0
+# ist hart gegen cuDNN 8 kompiliert, während unser torch (oben) cuDNN 9
+# mitbringt (die alte cudnn8-.so-Datei existiert dort gar nicht mehr) ->
+# "Could not load library libcudnn_ops_infer.so.8". Seit ctranslate2==4.5.0
+# gibt es native cuDNN-9-Unterstützung, das behebt es sauber ohne System-Pakete.
+ctranslate2>=4.5.0
+
+# --- Sonstiges ---
+pandas>=2.2.0
+tqdm>=4.66.0
+pyloudnorm>=0.1.1
+requests>=2.31.0
