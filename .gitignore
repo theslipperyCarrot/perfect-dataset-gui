@@ -1,10 +1,13 @@
 # venvs (nicht Teil des Repos, jeder installiert selbst über requirements.txt)
 .venv/
 nisqa_server/.venv/
+denoise_server/.venv/
+separator_server/.venv/
 
 # Laufzeit-/Nutzdaten (nicht versionieren)
 data/
 snapshots/
+settings.json
 
 # Python
 __pycache__/

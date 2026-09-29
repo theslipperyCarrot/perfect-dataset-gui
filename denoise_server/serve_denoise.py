@@ -8,6 +8,7 @@ braucht zwingend numpy<2.0, was mit modernen whisperx/ctranslate2-Versionen
 Start: uvicorn serve_denoise:app --port 8051
 (siehe start.sh im Projekt-Wurzelverzeichnis für den kombinierten Start)
 """
+import gc
 import sys
 import types
 import importlib.abc
@@ -118,6 +119,24 @@ def _load_model():
     return _model, _df_state
 
 
+def _release_model():
+    """Modell nach JEDER Anfrage wieder aus dem GPU-Speicher entfernen,
+    statt es dauerhaft resident zu halten (gleiches Prinzip wie bei
+    separator_server ab 0.20.4). DeepFilterNet3 ist klein und lädt sehr
+    schnell (deutlich unter 1s) — die Kosten für erneutes Laden pro Datei
+    sind vernachlässigbar, der freigewordene VRAM zählt hier mehr."""
+    global _model, _df_state
+    _model = None
+    _df_state = None
+    gc.collect()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -125,31 +144,34 @@ def health():
 
 @app.post("/denoise")
 async def denoise(file: UploadFile = File(...)):
-    import torch
-    _ensure_torchaudio_compat()  # MUSS vor 'from df.enhance import enhance' passieren
-    from df.enhance import enhance
+    try:
+        import torch
+        _ensure_torchaudio_compat()  # MUSS vor 'from df.enhance import enhance' passieren
+        from df.enhance import enhance
 
-    model, df_state = _load_model()
-    target_sr = df_state.sr()
+        model, df_state = _load_model()
+        target_sr = df_state.sr()
 
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmp_in:
-        tmp_in.write(await file.read())
-        tmp_in.flush()
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmp_in:
+            tmp_in.write(await file.read())
+            tmp_in.flush()
 
-        audio, sr = sf.read(tmp_in.name, always_2d=True, dtype="float32")
-        audio = audio.T  # (Samples, Kanäle) -> (Kanäle, Samples)
-        if sr != target_sr:
-            import librosa
-            audio = librosa.resample(audio, orig_sr=sr, target_sr=target_sr, axis=-1)
-        if audio.shape[0] > 1:
-            audio = audio.mean(axis=0, keepdims=True)
+            audio, sr = sf.read(tmp_in.name, always_2d=True, dtype="float32")
+            audio = audio.T  # (Samples, Kanäle) -> (Kanäle, Samples)
+            if sr != target_sr:
+                import librosa
+                audio = librosa.resample(audio, orig_sr=sr, target_sr=target_sr, axis=-1)
+            if audio.shape[0] > 1:
+                audio = audio.mean(axis=0, keepdims=True)
 
-        wav_tensor = torch.from_numpy(np.ascontiguousarray(audio))
-        enhanced = enhance(model, df_state, wav_tensor)
-        enhanced_np = enhanced.detach().cpu().numpy()
-        if enhanced_np.ndim == 2:
-            enhanced_np = enhanced_np[0]
+            wav_tensor = torch.from_numpy(np.ascontiguousarray(audio))
+            enhanced = enhance(model, df_state, wav_tensor)
+            enhanced_np = enhanced.detach().cpu().numpy()
+            if enhanced_np.ndim == 2:
+                enhanced_np = enhanced_np[0]
 
-    out_path = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
-    sf.write(out_path, enhanced_np, target_sr, subtype="PCM_16")
-    return FileResponse(out_path, media_type="audio/wav")
+        out_path = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
+        sf.write(out_path, enhanced_np, target_sr, subtype="PCM_16")
+        return FileResponse(out_path, media_type="audio/wav")
+    finally:
+        _release_model()

@@ -33,14 +33,25 @@ def score_all(progress_cb=None) -> tuple[int, int]:
     entries: list[ClipEntry] = load_manifest()
     scored, failed = 0, 0
     total = len(entries)
-    for i, e in enumerate(entries, start=1):
-        mos = score_clip(SEGMENTS_DIR / e.clip_filename)
-        if mos is not None:
-            e.nisqa_mos = mos
-            scored += 1
-        else:
-            failed += 1
-        if progress_cb:
-            progress_cb(i, total, e.id)
-    save_manifest(entries)
+    try:
+        for i, e in enumerate(entries, start=1):
+            mos = score_clip(SEGMENTS_DIR / e.clip_filename)
+            if mos is not None:
+                e.nisqa_mos = mos
+                scored += 1
+            else:
+                failed += 1
+            if progress_cb:
+                progress_cb(i, total, e.id)
+    finally:
+        save_manifest(entries)
+        # NISQA-Modell nach dem KOMPLETTEN Durchlauf freigeben (nicht pro
+        # Clip — das wäre bei 50-100+ Clips viel zu teuer). Gleiches Prinzip
+        # wie bei Demucs/whisperX/UVR: läuft in Tab 3 direkt im Anschluss an
+        # die Transkription (seit 0.20.3), soll den GPU-Speicher danach
+        # nicht dauerhaft belegt halten.
+        try:
+            requests.post(NISQA_SERVER_URL.replace("/predict", "/release"), timeout=30.0)
+        except Exception as e:
+            print(f"[quality_score] NISQA-Modell-Freigabe fehlgeschlagen (nicht kritisch): {e}")
     return scored, failed

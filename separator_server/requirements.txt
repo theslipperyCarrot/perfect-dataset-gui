@@ -1,0 +1,13 @@
+fastapi>=0.110.0
+uvicorn>=0.29.0
+python-multipart>=0.0.9
+
+# audio-separator: bündelt UVR-Modelle (MDX-Net, VR-Arch, BS-Roformer) für
+# Vocal/Musik-Trennung. Braucht numpy>=2 und eigene onnxruntime/Modell-
+# Download-Abhängigkeiten -> eigene, isolierte venv statt gemeinsamer
+# Umgebung (gleiches Muster wie nisqa_server/ und denoise_server/).
+# [gpu]-Extra installiert onnxruntime-gpu; ohne NVIDIA-GPU stattdessen
+# "audio-separator[cpu]" in dieser Datei eintragen (deutlich langsamer).
+audio-separator[gpu]>=0.28.0
+
+soundfile>=0.12.1

@@ -13,3 +13,4 @@ torchaudio>=2.2.0
 
 numpy>=1.22,<2.0
 soundfile>=0.12.1
+librosa>=0.10.0  # nur für Resampling gebraucht, wenn Eingangs-Samplerate != Modell-Samplerate

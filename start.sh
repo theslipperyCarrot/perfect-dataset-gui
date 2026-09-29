@@ -32,6 +32,7 @@ print(':'.join(dirs))
 MAIN_PY="$SCRIPT_DIR/.venv/bin/python"
 NISQA_PY="$SCRIPT_DIR/nisqa_server/.venv/bin/python"
 DENOISE_PY="$SCRIPT_DIR/denoise_server/.venv/bin/python"
+SEPARATOR_PY="$SCRIPT_DIR/separator_server/.venv/bin/python"
 
 if [ ! -x "$MAIN_PY" ]; then
     echo "Haupt-venv nicht gefunden unter: $MAIN_PY"
@@ -103,6 +104,21 @@ echo "Starte Denoise-Server (Port 8051)..."
 ) &
 BG_PIDS+=($!)
 
+SEPARATOR_ENABLED=0
+if [ -x "$SEPARATOR_PY" ]; then
+    echo "Starte Separator-Server / UVR (Port 8052)..."
+    (
+        cd "$SCRIPT_DIR/separator_server"
+        export LD_LIBRARY_PATH="$(torch_ld_library_path "$SEPARATOR_PY")"
+        "$SEPARATOR_PY" -m uvicorn serve_separator:app --port 8052 --host 0.0.0.0
+    ) &
+    BG_PIDS+=($!)
+    SEPARATOR_ENABLED=1
+else
+    echo "Separator-Server (UVR) nicht installiert — übersprungen, Tab 2 bietet dann"
+    echo "nur Demucs als Engine an. Für UVR: bash separator_server/install.sh"
+fi
+
 wait_for_server() {
     local name="$1" url="$2"
     echo "Warte auf $name..."
@@ -120,6 +136,9 @@ wait_for_server() {
 
 wait_for_server "NISQA-Server" "http://localhost:8050/health"
 wait_for_server "Denoise-Server" "http://localhost:8051/health"
+if [ "$SEPARATOR_ENABLED" = "1" ]; then
+    wait_for_server "Separator-Server (UVR)" "http://localhost:8052/health"
+fi
 
 echo "Starte Perfect Dataset GUI..."
 export LD_LIBRARY_PATH="$(torch_ld_library_path "$MAIN_PY")"

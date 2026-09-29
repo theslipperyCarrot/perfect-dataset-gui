@@ -8,6 +8,7 @@ Demucs/whisperX/DeepFilterNet aktualisiert/neu gestartet werden kann.
 Start: uvicorn serve_nisqa:app --port 8050
 (siehe start.sh im Projekt-Wurzelverzeichnis für den kombinierten Start)
 """
+import gc
 import tempfile
 from pathlib import Path
 
@@ -75,6 +76,28 @@ def _load_model():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/release")
+def release():
+    """Modell explizit aus dem GPU-Speicher entfernen. Wird vom Client NICHT
+    nach jeder einzelnen Bewertung aufgerufen (NISQA läuft oft für 50-100+
+    Clips in einem Rutsch — Neuladen pro Clip wäre viel zu teuer), sondern
+    einmal am Ende eines kompletten Bewertungs-Durchlaufs (siehe
+    modules/quality_score.py, score_all()). Gleiches Grundprinzip wie die
+    automatische Freigabe bei separator_server/denoise_server, nur mit
+    explizitem Aufruf statt pro Request, weil hier die Aufruf-Häufigkeit
+    eine andere ist."""
+    global _model
+    _model = None
+    gc.collect()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+    return {"status": "released"}
 
 
 @app.post("/predict")

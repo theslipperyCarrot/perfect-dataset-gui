@@ -24,10 +24,15 @@ welcome.
 
 1. **Import** — Upload audio files (single, multiple, or a whole folder),
    automatic conversion to mono + a consistent sample rate.
-2. **Music/Noise Removal** — Separate out music/background noise via Demucs
-   (`htdemucs_ft`), with optional additional DeepFilterNet denoising.
-   Selectable: separate out music *or* discard sections containing music
-   entirely (higher dataset quality when separation is imperfect).
+2. **Music/Noise Removal** — Separate out music/background noise, via
+   **Demucs** (`htdemucs_ft`, default, no extra install) or **UVR**
+   (`audio-separator`, BS-Roformer model, often cleaner but needs its own
+   server, see Installation below), with optional additional DeepFilterNet
+   denoising. Selectable: separate out music *or* discard sections containing
+   music entirely (higher dataset quality when separation is imperfect). A
+   cheap level-based pre-check skips longer stretches of pure silence
+   (intro/outro/pauses ≥2s) before the actual separation, without shifting
+   the timeline.
 3. **Segmentation + Transcription** — Silero VAD detects speech segments,
    whisperX transcribes with word timestamps; clip boundaries snap to word
    boundaries, with fade-in/-out and silence trim at the edges.
@@ -59,7 +64,8 @@ function, and automatic reset on exit.
 Three separate Python environments: the main GUI, the NISQA quality server,
 and the denoise server (DeepFilterNet) — both as their own independent
 venvs, since they have dependencies incompatible with the main project (see
-the `requirements.txt` comments).
+the `requirements.txt` comments). A fourth, **optional** environment adds the
+UVR separation engine.
 
 ```
 # Main GUI
@@ -71,7 +77,14 @@ bash nisqa_server/install.sh
 
 # Denoise server (separate, own venv)
 bash denoise_server/install.sh
+
+# Separator server (optional, separate, own venv) — only needed for the UVR
+# engine in Tab 2; Demucs works without this
+bash separator_server/install.sh
 ```
+
+Without the separator server installed, Tab 2 still works normally with
+Demucs — the UVR option just isn't available until you install it.
 
 ## Starting
 
@@ -93,7 +106,12 @@ if you want to keep them.
 
 Central settings (sample rates, thresholds, model selection, target
 directories) in `config.py` — explained there with comments for what each
-value does.
+value does. Workflow parameters that affect the result (clip length,
+trim/padding, thresholds, target loudness, ...) can additionally be
+adjusted live in the GUI's **⚙️ Settings** tab, without touching code —
+overrides are saved to `settings.json` and survive a reset. `config.py`
+stays the factory default/fallback; purely technical settings (server
+ports/URLs, paths, sample rate, model filenames) are only in `config.py`.
 
 ## Known Limitations
 
@@ -105,8 +123,11 @@ value does.
   DeepFilterNet, whisperX/pyannote) aren't consistently compatible with the
   latest `torchaudio` APIs. Compatibility layer for this:
   `modules/torchaudio_compat.py`.
-- NISQA server runs on port 8050, denoise server on port 8051 (both
-  changeable in `config.py`).
+- NISQA server runs on port 8050, denoise server on port 8051, separator
+  server on port 8052 (all changeable in `config.py`).
+- The UVR separation engine (`audio-separator`) is a recent addition and
+  more compute-intensive than Demucs; it hasn't been tested here on real
+  hardware yet.
 
 Details on version history: [CHANGELOG.md](CHANGELOG.md).
 
@@ -143,10 +164,15 @@ sind ausdrücklich willkommen.
 
 1. **Import** — Audiodateien (einzeln, mehrfach oder ganzer Ordner) hochladen,
    automatische Konvertierung auf Mono + einheitliche Samplerate.
-2. **Music/Noise Removal** — Musik/Hintergrundgeräusche per Demucs
-   (`htdemucs_ft`) heraustrennen, optional zusätzliches DeepFilterNet-
-   Denoising. Wählbar: Musik heraustrennen *oder* Abschnitte mit Musik
-   komplett verwerfen (höhere Datensatz-Qualität bei unsauberer Trennung).
+2. **Music/Noise Removal** — Musik/Hintergrundgeräusche heraustrennen, wahlweise
+   per **Demucs** (`htdemucs_ft`, Standard, keine Zusatzinstallation) oder
+   **UVR** (`audio-separator`, BS-Roformer-Modell, oft sauberer, braucht
+   eigenen Server, siehe Installation unten), optional zusätzliches
+   DeepFilterNet-Denoising. Wählbar: Musik heraustrennen *oder* Abschnitte
+   mit Musik komplett verwerfen (höhere Datensatz-Qualität bei unsauberer
+   Trennung). Eine günstige Pegel-Vorprüfung überspringt längere Strecken
+   reiner Stille (Intro/Outro/Pausen ≥2s) vor der eigentlichen Trennung,
+   ohne die Zeitachse zu verschieben.
 3. **Segmentierung + Transkription** — Silero VAD erkennt Sprachabschnitte,
    whisperX transkribiert mit Wort-Timestamps; Clip-Grenzen werden auf
    Wortgrenzen eingerastet, Fade-in/-out und Silence-Trim an den Rändern.
@@ -178,7 +204,8 @@ automatischer Reset beim Beenden.
 Drei getrennte Python-Umgebungen: die Haupt-GUI, der NISQA-Qualitäts-Server
 und der Denoise-Server (DeepFilterNet) — beide als eigene, unabhängige venvs,
 da sie mit dem Hauptprojekt inkompatible Abhängigkeiten haben (siehe
-`requirements.txt`-Kommentare).
+`requirements.txt`-Kommentare). Eine vierte, **optionale** Umgebung bringt
+die UVR-Trenn-Engine dazu.
 
 ```
 # Haupt-GUI
@@ -190,7 +217,14 @@ bash nisqa_server/install.sh
 
 # Denoise-Server (separat, eigene venv)
 bash denoise_server/install.sh
+
+# Separator-Server (optional, separat, eigene venv) — nur für die UVR-Engine
+# in Tab 2 nötig, Demucs funktioniert auch ohne
+bash separator_server/install.sh
 ```
+
+Ohne installierten Separator-Server funktioniert Tab 2 weiterhin ganz normal
+mit Demucs — die UVR-Option ist dann einfach nicht wählbar, bis installiert.
 
 ## Starten
 
@@ -212,7 +246,13 @@ sichern, falls sie erhalten bleiben sollen.
 
 Zentrale Einstellungen (Samplerates, Schwellwerte, Modell-Auswahl,
 Zielverzeichnisse) in `config.py` — dort mit Kommentar erklärt, wofür jeder
-Wert steht.
+Wert steht. Workflow-Parameter, die das Ergebnis beeinflussen (Clip-Länge,
+Trim/Padding, Schwellwerte, Ziel-Lautstärke, ...), lassen sich zusätzlich
+live im GUI-Tab **⚙️ Einstellungen** anpassen, ohne Code anzufassen —
+Überschreibungen werden in `settings.json` gespeichert und überstehen einen
+Reset. `config.py` bleibt die Werkseinstellung/der Fallback; rein
+Technisches (Server-Ports/-URLs, Pfade, Samplerate, Modell-Dateinamen)
+steht nur in `config.py`.
 
 ## Bekannte Einschränkungen
 
@@ -223,8 +263,10 @@ Wert steht.
   `requirements.txt`), da mehrere Abhängigkeiten (Demucs-Fork, DeepFilterNet,
   whisperX/pyannote) nicht durchgängig mit den neuesten `torchaudio`-APIs
   kompatibel sind. Kompatibilitätsschicht dafür: `modules/torchaudio_compat.py`.
-- NISQA-Server läuft auf Port 8050, Denoise-Server auf Port 8051 (beide in
-  `config.py` änderbar).
+- NISQA-Server läuft auf Port 8050, Denoise-Server auf Port 8051,
+  Separator-Server auf Port 8052 (alle in `config.py` änderbar).
+- Die UVR-Trenn-Engine (`audio-separator`) ist neu dazugekommen und
+  rechenintensiver als Demucs; bisher nicht auf echter Hardware getestet.
 
 Details zur Versionshistorie: [CHANGELOG.md](CHANGELOG.md).
 

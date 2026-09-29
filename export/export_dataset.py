@@ -21,10 +21,8 @@ import numpy as np
 import pyloudnorm as pyln
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from config import (
-    SEGMENTS_DIR, EXPORT_DIR, EXPORT_SAMPLE_RATES, LJSPEECH_METADATA_FILENAME,
-    TARGET_LUFS, PEAK_LIMIT,
-)
+from config import SEGMENTS_DIR, EXPORT_DIR, EXPORT_SAMPLE_RATES, LJSPEECH_METADATA_FILENAME, PEAK_LIMIT
+from modules import settings
 from modules.segment_and_transcribe import ClipEntry, load_manifest
 
 XTTS_DIR = EXPORT_DIR / "xtts"
@@ -45,11 +43,14 @@ class ExportSummary:
             self.errors = []
 
 
-def _normalize_loudness(audio: np.ndarray, sr: int, target_lufs: float = TARGET_LUFS) -> np.ndarray:
+def _normalize_loudness(audio: np.ndarray, sr: int, target_lufs: float = None) -> np.ndarray:
     """Normalisiert auf eine einheitliche LUFS-Lautstärke, mit Peak-Limiting
     gegen Clipping. Bei (quasi) Stille ist integrated_loudness -inf — in dem
     Fall bleibt der Clip unverändert, statt mit einem Fantasie-Gain
-    hochgerechnet zu werden."""
+    hochgerechnet zu werden. target_lufs: None -> aktuelle Einstellung aus
+    dem Einstellungen-Tab."""
+    if target_lufs is None:
+        target_lufs = settings.get("TARGET_LUFS")
     meter = pyln.Meter(sr)
     try:
         loudness = meter.integrated_loudness(audio)
