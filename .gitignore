@@ -15,3 +15,9 @@ __pycache__/
 
 # NISQA/DeepFilterNet-Modell-Caches (werden automatisch nachgeladen)
 *.ckpt
+
+# Versehentliche Server-Ausgabedateien (z.B. vor dem output_dir-Fix in 0.20.4
+# landeten UVR-Ergebnisse teils im Arbeitsverzeichnis statt in einem Temp-Ordner)
+separator_server/*.wav
+denoise_server/*.wav
+nisqa_server/*.wav

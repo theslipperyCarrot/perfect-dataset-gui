@@ -20,7 +20,7 @@ from pathlib import Path
 # Semantisch: <1.0.0 solange kein vollständiger Echtdurchlauf (alle 5 Tabs,
 # echtes Audio) bestätigt wurde. Wird in Snapshot-Namen mit eingebettet,
 # siehe modules/snapshot.py, und im GUI-Header angezeigt.
-PROJECT_VERSION = "0.23.1"
+PROJECT_VERSION = "0.23.2"
 
 # --- Verzeichnisstruktur ---
 BASE_DIR = Path(__file__).resolve().parent
@@ -97,6 +97,15 @@ SILERO_VAD_THRESHOLD = 0.5  # Sprach-Wahrscheinlichkeit, ab der als Sprache gewe
 # "fehlendes erstes Wort"-Problem, falls der gemeldete Wort-Timestamp zu spät
 # ansetzt. Siehe _pad_clip_boundaries().
 WORD_BOUNDARY_PAD_S = 0.08
+
+# Zusätzlich zum Wortrand-Polster: jede Clip-Grenze (nach dem Polster) wird
+# in einem kleinen Radius auf den Punkt der geringsten lokalen Energie im
+# tatsächlichen Audiosignal "gesnappt" — korrigiert Millisekunden-
+# Ungenauigkeit in whisperX' Wort-Zeitstempeln, die auch mit mehr Kontext
+# (Kontrollschleife) bestehen bleibt, weil sie nicht an fehlendem Kontext
+# liegt, sondern an der Ausrichtung selbst. 0 deaktiviert das Snapping.
+# Siehe _snap_to_energy_minimum().
+ENERGY_SNAP_RADIUS_S = 0.15
 
 # --- Clip-Nachbearbeitung ---
 SILENCE_TRIM_TOP_DB = 35     # librosa.effects.trim: alles leiser als (max_dB - top_db) wird an den Rändern abgeschnitten

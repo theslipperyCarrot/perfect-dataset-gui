@@ -38,6 +38,7 @@ SETTINGS_SPEC = {
     "MIN_SILENCE_GAP_S": (config.MIN_SILENCE_GAP_S, 0.05, 2.0, 0.05, "segmentation", 2),
     "SILERO_VAD_THRESHOLD": (config.SILERO_VAD_THRESHOLD, 0.1, 0.9, 0.05, "segmentation", 2),
     "WORD_BOUNDARY_PAD_S": (config.WORD_BOUNDARY_PAD_S, 0.0, 0.5, 0.01, "segmentation", 2),
+    "ENERGY_SNAP_RADIUS_S": (config.ENERGY_SNAP_RADIUS_S, 0.0, 0.5, 0.01, "segmentation", 2),
     "SILENCE_TRIM_TOP_DB": (config.SILENCE_TRIM_TOP_DB, 10, 60, 1, "segmentation", 0),
     "SILENCE_TRIM_MAX_S": (config.SILENCE_TRIM_MAX_S, 0.0, 0.5, 0.01, "segmentation", 2),
     "FADE_DURATION_S": (config.FADE_DURATION_S, 0.0, 0.5, 0.01, "segmentation", 2),

@@ -388,6 +388,50 @@ def _trim_and_fade(clip_audio: np.ndarray, sr: int, top_db: float, max_trim_s: f
     return trimmed
 
 
+def _snap_to_energy_minimum(
+    audio: np.ndarray, sr: int, time_s: float, radius_s: float, frame_s: float = 0.01,
+) -> float:
+    """Sucht in einem kleinen Fenster um `time_s` herum (±radius_s) den Punkt
+    mit der geringsten lokalen Energie (RMS) im tatsächlichen Audiosignal und
+    gibt dessen Zeit zurück, statt stur der übergebenen (von whisperX
+    gemeldeten) Zeit zu vertrauen.
+
+    Grund: whisperX' Wort-Zeitstempel können um ein paar zehn/hundert
+    Millisekunden danebenliegen — mehr Kontext (siehe reclip_entry/
+    _find_best_matching_span) hilft dagegen bei fehlenden/zusätzlichen
+    WÖRTERN, aber nicht bei dieser Art Millisekunden-Ungenauigkeit an sich
+    (Praxisbeispiel: Wortfragmente am Clip-Rand trotz erweitertem
+    Suchfenster). Die tatsächliche Sprechpause zwischen zwei Wörtern ist
+    akustisch die Stelle mit der geringsten Energie im Signal — die wird
+    hier direkt gesucht, statt sich auf eine Modell-Vorhersage zu verlassen.
+
+    radius_s <= 0 deaktiviert das Snapping (Originalzeit wird unverändert
+    zurückgegeben)."""
+    if radius_s <= 0:
+        return time_s
+
+    center = int(time_s * sr)
+    radius = int(radius_s * sr)
+    frame = max(1, int(frame_s * sr))
+    hop = max(1, frame // 2)
+
+    lo = max(0, center - radius)
+    hi = min(len(audio), center + radius)
+    if hi - lo < frame:
+        return time_s
+
+    best_idx, best_rms = None, None
+    for i in range(lo, hi - frame + 1, hop):
+        window = audio[i:i + frame]
+        rms = float(np.sqrt(np.mean(np.square(window))))
+        if best_rms is None or rms < best_rms:
+            best_rms, best_idx = rms, i
+
+    if best_idx is None:
+        return time_s
+    return (best_idx + frame / 2) / sr
+
+
 def _find_best_matching_span(words: list[dict], expected_text: str):
     """Durchsucht `words` (Wort-Zeitstempel aus einem ERWEITERTEN Zeitfenster,
     siehe reclip_entry) nach der zusammenhängenden Wortfolge, die am besten
@@ -499,6 +543,13 @@ def reclip_entry(
 
         new_start = window_start + max(0.0, rel_start - pad_s)
         new_end = min(window_end, window_start + rel_end + pad_s)
+
+        snap_radius_s = settings.get("ENERGY_SNAP_RADIUS_S")
+        new_start = _snap_to_energy_minimum(audio, sr, new_start, snap_radius_s)
+        new_end = _snap_to_energy_minimum(audio, sr, new_end, snap_radius_s)
+        new_start = max(window_start, new_start)
+        new_end = min(window_end, new_end)
+
         return True, new_start, new_end, wer
     finally:
         tmp_path.unlink(missing_ok=True)
@@ -569,8 +620,12 @@ def process_file(processed_path: Path, device: str = "cuda", language: str = WHI
     max_trim_s = settings.get("SILENCE_TRIM_MAX_S")
     fade_s = settings.get("FADE_DURATION_S")
 
+    snap_radius_s = settings.get("ENERGY_SNAP_RADIUS_S")
+
     entries = []
     for idx, (start, end) in enumerate(clip_bounds):
+        start = _snap_to_energy_minimum(audio, sr, start, snap_radius_s)
+        end = _snap_to_energy_minimum(audio, sr, end, snap_radius_s)
         start_sample = max(0, int(start * sr))
         end_sample = min(len(audio), int(end * sr))
         clip_audio = audio[start_sample:end_sample]
