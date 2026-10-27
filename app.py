@@ -335,20 +335,41 @@ def _review_table_rows(entries):
     ]
 
 
-def handle_review_play(evt: gr.SelectData, entries):
-    """Spielt den Clip ab, wenn in der Review-Tabelle auf die ▶-Spalte
-    geklickt wird. Bei Klick auf eine andere Spalte (z.B. Transkript zum
-    Bearbeiten) bleibt der Player unverändert (gr.update()). Liefert
-    zusätzlich den Clip-Dateinamen zurück (für handle_trim_apply — der Player
-    selbst kennt nach dem Trimmen nur noch die neuen Audiodaten, nicht mehr,
-    zu welcher Datei sie gehören)."""
+def handle_review_select(evt: gr.SelectData, entries):
+    """Schritt 1 des Clip-Ladens (muss DIREKT am select()-Ereignis hängen —
+    nur an eine direkt gebundene Funktion reicht Gradio die Klickposition
+    SelectData weiter). Bei Klick auf die ▶-Spalte: Player leeren (setzt
+    dessen Trimm-Zustand zurück) und den gewünschten Clip in einem State
+    vormerken, den handle_review_load_pending (Schritt 2, per .then()
+    nachgeschaltet, braucht KEINE Klickdaten) dann lädt.
+
+    Bei Klick auf eine andere Spalte (z.B. Transkript zum Bearbeiten) bleibt
+    der Player unverändert und nichts wird vorgemerkt.
+
+    Hintergrund: In 0.22.1 hing die Ladefunktion selbst per .then() hinter
+    einem Leer-Schritt und erhielt dadurch keine Klickposition mehr
+    (SelectData=None) -> Absturz, Wiedergabe komplett kaputt. Diese
+    Aufteilung vermeidet das: die Funktion MIT Klickdaten bleibt direkt
+    gebunden, nur die Funktion OHNE Klickdaten hängt hinten dran."""
     row, col = evt.index
     if col != REVIEW_PLAY_COL or row < 0 or row >= len(entries):
+        return gr.update(), None
+    clip_filename = entries[row].clip_filename
+    if not (SEGMENTS_DIR / clip_filename).exists():
+        return gr.update(), None
+    return None, clip_filename  # Player leeren + Clip vormerken
+
+
+def handle_review_load_pending(pending_clip_filename):
+    """Schritt 2 (per .then() nachgeschaltet): lädt den in Schritt 1
+    vorgemerkten Clip in den (inzwischen geleerten) Player. Liefert zusätzlich
+    den Clip-Dateinamen für handle_trim_apply zurück — der Player selbst kennt
+    nach dem Trimmen nur noch die neuen Audiodaten, nicht mehr, zu welcher
+    Datei sie gehören. Nichts vorgemerkt (Klick auf andere Spalte) -> alles
+    unverändert lassen."""
+    if not pending_clip_filename:
         return gr.update(), gr.update()
-    clip_path = SEGMENTS_DIR / entries[row].clip_filename
-    if not clip_path.exists():
-        return gr.update(), gr.update()
-    return str(clip_path), entries[row].clip_filename
+    return str(SEGMENTS_DIR / pending_clip_filename), pending_clip_filename
 
 
 def handle_trim_apply(audio_value, clip_filename, entries):
@@ -765,6 +786,7 @@ with gr.Blocks(title="Perfect Dataset GUI") as demo:
 
             review_status = gr.Markdown("")
             selected_clip_filename = gr.State(None)
+            pending_clip_filename = gr.State(None)  # Zwischenspeicher zwischen select()- und .then()-Schritt
             review_audio_player = gr.Audio(
                 label=t(DEFAULT_LANG, "review_audio_label"), interactive=True, autoplay=True,
             )
@@ -801,16 +823,18 @@ with gr.Blocks(title="Perfect Dataset GUI") as demo:
                 outputs=[review_entries, review_table, review_status],
             )
             review_table.select(
-                # WICHTIG: handle_review_play muss DIREKT am select()-Ereignis
-                # hängen, nicht über .then() verkettet — Gradio gibt die
-                # Klick-Positionsdaten (SelectData, welche Zeile/Spalte) nur an
-                # die direkt gebundene Funktion weiter. Ein vorgeschalteter
-                # .then()-Schritt (Versuch aus 0.22.1 gegen klebende Trimm-
-                # Grenzen beim Clip-Wechsel) bekam dadurch bei jedem Klick
-                # `None` statt der Klickposition und crashte — Wiedergabe war
-                # komplett kaputt. Der Trimm-Grenzen-Bug ist damit wieder
-                # ungelöst, aber Abspielen funktioniert wieder zuverlässig.
-                fn=handle_review_play, inputs=[review_entries],
+                # Schritt 1 — DIREKT am select()-Ereignis (nur dort bekommt die
+                # Funktion die Klickposition SelectData): Player leeren und
+                # gewünschten Clip vormerken. Siehe handle_review_select.
+                fn=handle_review_select, inputs=[review_entries],
+                outputs=[review_audio_player, pending_clip_filename],
+            ).then(
+                # Schritt 2 — per .then() nachgeschaltet, braucht KEINE
+                # Klickdaten (liest nur den vorgemerkten State): lädt den Clip
+                # in den inzwischen geleerten Player. Der zwischenzeitlich
+                # leere Player setzt den Trimm-Zustand zurück (gegen die
+                # klebenden Trimm-Grenzen beim Clip-Wechsel).
+                fn=handle_review_load_pending, inputs=[pending_clip_filename],
                 outputs=[review_audio_player, selected_clip_filename],
             )
             trim_apply_btn.click(

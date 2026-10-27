@@ -390,6 +390,7 @@ def _trim_and_fade(clip_audio: np.ndarray, sr: int, top_db: float, max_trim_s: f
 
 def _snap_to_energy_minimum(
     audio: np.ndarray, sr: int, time_s: float, radius_s: float, frame_s: float = 0.01,
+    max_ratio: float = 0.5,
 ) -> float:
     """Sucht in einem kleinen Fenster um `time_s` herum (±radius_s) den Punkt
     mit der geringsten lokalen Energie (RMS) im tatsächlichen Audiosignal und
@@ -404,6 +405,15 @@ def _snap_to_energy_minimum(
     Suchfenster). Die tatsächliche Sprechpause zwischen zwei Wörtern ist
     akustisch die Stelle mit der geringsten Energie im Signal — die wird
     hier direkt gesucht, statt sich auf eine Modell-Vorhersage zu verlassen.
+
+    Sicherheitsschwelle: Es wird NUR gesnappt, wenn der gefundene leiseste
+    Punkt höchstens `max_ratio` (Default 50%) der Energie am ursprünglichen
+    Punkt hat — also deutlich leiser, nicht nur marginal. Ohne diese Schwelle
+    (Erstfassung 0.23.2) wurde blind das globale Minimum im Suchradius
+    genommen, auch wenn es kaum leiser war als der Ausgangspunkt — dadurch
+    konnte die Grenze zu einer beliebigen Mikropause mitten im Satz
+    springen statt an der tatsächlichen Wort-/Satzgrenze zu bleiben
+    (Praxisbeispiel: Text am Satzende wurde teils komplett abgeschnitten).
 
     radius_s <= 0 deaktiviert das Snapping (Originalzeit wird unverändert
     zurückgegeben)."""
@@ -420,6 +430,10 @@ def _snap_to_energy_minimum(
     if hi - lo < frame:
         return time_s
 
+    ref_start = max(0, center - frame // 2)
+    ref_window = audio[ref_start:ref_start + frame]
+    orig_rms = float(np.sqrt(np.mean(np.square(ref_window)))) if len(ref_window) else 0.0
+
     best_idx, best_rms = None, None
     for i in range(lo, hi - frame + 1, hop):
         window = audio[i:i + frame]
@@ -429,6 +443,8 @@ def _snap_to_energy_minimum(
 
     if best_idx is None:
         return time_s
+    if orig_rms > 0 and best_rms > orig_rms * max_ratio:
+        return time_s  # keine deutliche Verbesserung -> Originalgrenze behalten
     return (best_idx + frame / 2) / sr
 
 
@@ -541,14 +557,15 @@ def reclip_entry(
             return False, None, None, None
         rel_start, rel_end, wer = match
 
+        # KEIN Energie-Snapping mehr hier (anders als noch in 0.23.2): die
+        # Wortfolgen-Suche oben hat die Grenzen bereits anhand des
+        # tatsächlichen Textabgleichs bestimmt — ein nachträgliches, blindes
+        # Snapping auf den nächsten leisen Punkt im Suchradius konnte dieses
+        # genauere Ergebnis wieder verschieben (z.B. zu einer kurzen
+        # Mikropause mitten im Satz statt der echten Satzgrenze) und damit
+        # die Verbesserung der Kontrollschleife zunichtemachen.
         new_start = window_start + max(0.0, rel_start - pad_s)
         new_end = min(window_end, window_start + rel_end + pad_s)
-
-        snap_radius_s = settings.get("ENERGY_SNAP_RADIUS_S")
-        new_start = _snap_to_energy_minimum(audio, sr, new_start, snap_radius_s)
-        new_end = _snap_to_energy_minimum(audio, sr, new_end, snap_radius_s)
-        new_start = max(window_start, new_start)
-        new_end = min(window_end, new_end)
 
         return True, new_start, new_end, wer
     finally:

@@ -20,7 +20,7 @@ from pathlib import Path
 # Semantisch: <1.0.0 solange kein vollständiger Echtdurchlauf (alle 5 Tabs,
 # echtes Audio) bestätigt wurde. Wird in Snapshot-Namen mit eingebettet,
 # siehe modules/snapshot.py, und im GUI-Header angezeigt.
-PROJECT_VERSION = "0.23.2"
+PROJECT_VERSION = "0.23.3"
 
 # --- Verzeichnisstruktur ---
 BASE_DIR = Path(__file__).resolve().parent
@@ -105,7 +105,7 @@ WORD_BOUNDARY_PAD_S = 0.08
 # (Kontrollschleife) bestehen bleibt, weil sie nicht an fehlendem Kontext
 # liegt, sondern an der Ausrichtung selbst. 0 deaktiviert das Snapping.
 # Siehe _snap_to_energy_minimum().
-ENERGY_SNAP_RADIUS_S = 0.15
+ENERGY_SNAP_RADIUS_S = 0.06
 
 # --- Clip-Nachbearbeitung ---
 SILENCE_TRIM_TOP_DB = 35     # librosa.effects.trim: alles leiser als (max_dB - top_db) wird an den Rändern abgeschnitten

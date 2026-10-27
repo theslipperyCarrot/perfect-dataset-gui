@@ -53,7 +53,12 @@ def score_clip(clip_path: Path, expected_text: str, language: str = WHISPERX_LAN
         return None
     try:
         model = _load_model()
-        segments, _info = model.transcribe(str(clip_path), language=language, beam_size=1)
+        # beam_size=1 wäre reine Greedy-Dekodierung — bekannt dafür, bei
+        # kurzen, kontextlosen Audioschnipseln eher ein Rand-Wort zu
+        # verschlucken oder zu halluzinieren, auch wenn das Audio selbst in
+        # Ordnung ist. beam_size=5 (Whisper-üblicher Standard) ist deutlich
+        # robuster, kostet dafür etwas mehr Zeit pro Clip.
+        segments, _info = model.transcribe(str(clip_path), language=language, beam_size=5)
         roundtrip_text = " ".join(seg.text.strip() for seg in segments).strip()
 
         wer = word_error_rate(expected_text, roundtrip_text)
@@ -64,9 +69,18 @@ def score_clip(clip_path: Path, expected_text: str, language: str = WHISPERX_LAN
         if ref_words and not hyp_words:
             score = 0.0
         elif ref_words and hyp_words:
+            # Proportional abwerten statt hart auf einen festen Wert zu
+            # deckeln (vorher: min(score, 0.5) — das setzte JEDEN
+            # Rand-Mismatch auf exakt denselben Wert 0.5, unabhängig davon,
+            # wie gut der Rest war. Dadurch sahen ein knapp daneben
+            # liegender und ein stark abweichender Clip im Score identisch
+            # aus, UND es erzeugte eine auffällige Häufung exakt gleicher
+            # Werte. Multiplikation erhält die Rangfolge zwischen Clips,
+            # straft Rand-Fehler aber weiterhin klar genug ab, um unter
+            # der Standard-Warnschwelle zu landen.
             boundary_mismatch = ref_words[0] != hyp_words[0] or ref_words[-1] != hyp_words[-1]
             if boundary_mismatch:
-                score = min(score, 0.5)
+                score = score * 0.5
 
         return round(score, 3)
     except Exception as e:
